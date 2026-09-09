@@ -20,7 +20,7 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   // ==========================================================================
-  // 1. DELIVERY ADDRESS (static — design ke mutabiq)
+  // 1. DELIVERY ADDRESS (editable — Change button se update hoti hai)
   // ==========================================================================
 
   String _addressName = 'Ahmed Khan';
@@ -51,6 +51,46 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         backgroundColor: const Color(0xFF087524),
       ),
     );
+  }
+
+  // ==========================================================================
+  // 2b. CHANGE ADDRESS — sheet kholta hai
+  //
+  // Sheet ka content alag widget (_ChangeAddressSheet) hai — file
+  // ke end par. Controllers/keyboard uske apne lifecycle mein hain.
+  // ==========================================================================
+
+  Future<void> _changeAddress() async {
+    final result = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+
+      // Keyboard khulne par sheet upar uth ti hai
+      isScrollControlled: true,
+
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+
+      builder: (sheetContext) {
+        return _ChangeAddressSheet(
+          currentName: _addressName,
+          currentPhone: _addressPhone,
+          currentAddress: _addressLine,
+        );
+      },
+    );
+
+    // SAVE hua → address update
+    if (result != null) {
+      setState(() {
+        _addressName = result['name']!;
+        _addressPhone = result['phone']!;
+        _addressLine = result['address']!;
+      });
+
+      _showMessage('Delivery address updated');
+    }
   }
 
   // ==========================================================================
@@ -521,7 +561,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
                     const SizedBox(height: 12),
 
-                    // COD — selected (design ke mutabiq)
+                    // COD — selected
                     _buildPaymentOption(
                       icon: Icons.payments_outlined,
                       title: 'Cash on Delivery (COD)',
@@ -549,272 +589,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       isSelected: false,
                       onTap: () {
                         _showMessage('Easypaisa coming soon');
-                        // ==========================================================================
-                        // 2b. CHANGE ADDRESS (bottom sheet)
-                        //
-                        // Change tap → sheet (pre-filled fields)
-                        // SAVE → nayi values wapas → checkout update
-                        // Bahar tap / swipe down → koi change nahi
-                        // ==========================================================================
-
-                        Future<void> _changeAddress() async {
-                          // ---- Pre-filled controllers (current address se) ----
-                          final nameController = TextEditingController(
-                            text: _addressName,
-                          );
-                          final phoneController = TextEditingController(
-                            text: _addressPhone,
-                          );
-                          final addressController = TextEditingController(
-                            text: _addressLine,
-                          );
-
-                          final formKey = GlobalKey<FormState>();
-
-                          final result = await showModalBottomSheet<Map<String, String>>(
-                            context: context,
-
-                            // Keyboard khulne par sheet UPAR uth jaati hai
-                            isScrollControlled: true,
-
-                            backgroundColor: Colors.white,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.vertical(
-                                top: Radius.circular(24),
-                              ),
-                            ),
-
-                            builder: (sheetContext) {
-                              return Padding(
-                                // Keyboard ki height jitna neeche gap
-                                padding: EdgeInsets.only(
-                                  bottom: MediaQuery.of(sheetContext)
-                                      .viewInsets
-                                      .bottom,
-                                ),
-
-                                child: SingleChildScrollView(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    24,
-                                    12,
-                                    24,
-                                    24,
-                                  ),
-
-                                  child: Form(
-                                    key: formKey,
-
-                                    child: Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.start,
-                                      children: [
-                                        // --- Drag handle ---
-                                        Center(
-                                          child: Container(
-                                            width: 45,
-                                            height: 4,
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFD0D0D0),
-                                              borderRadius:
-                                                  BorderRadius.circular(10),
-                                            ),
-                                          ),
-                                        ),
-
-                                        const SizedBox(height: 18),
-
-                                        // --- Title ---
-                                        Text(
-                                          'Change Delivery Address',
-                                          style: GoogleFonts.plusJakartaSans(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-
-                                        const SizedBox(height: 20),
-
-                                        // --- Full Name ---
-                                        _buildAddressField(
-                                          controller: nameController,
-                                          label: 'Full Name',
-                                          icon: Icons.person_outline,
-                                          keyboardType: TextInputType.name,
-                                          validator: (value) {
-                                            if (value == null ||
-                                                value.trim().length < 3) {
-                                              return 'Please enter a valid name';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-
-                                        const SizedBox(height: 14),
-
-                                        // --- Phone ---
-                                        _buildAddressField(
-                                          controller: phoneController,
-                                          label: 'Phone Number',
-                                          icon: Icons.phone_outlined,
-                                          keyboardType: TextInputType.phone,
-                                          validator: (value) {
-                                            if (value == null ||
-                                                value.trim().length < 10) {
-                                              return 'Phone must be at least 10 digits';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-
-                                        const SizedBox(height: 14),
-
-                                        // --- Address (multi-line) ---
-                                        _buildAddressField(
-                                          controller: addressController,
-                                          label: 'Complete Address',
-                                          icon: Icons.location_on_outlined,
-                                          keyboardType:
-                                              TextInputType.streetAddress,
-                                          maxLines: 3,
-                                          validator: (value) {
-                                            if (value == null ||
-                                                value.trim().length < 10) {
-                                              return 'Please enter complete address';
-                                            }
-                                            return null;
-                                          },
-                                        ),
-
-                                        const SizedBox(height: 24),
-
-                                        // --- SAVE button ---
-                                        SizedBox(
-                                          width: double.infinity,
-                                          height: 52,
-
-                                          child: ElevatedButton(
-                                            // Validation pass → values wapas bhejo
-                                            onPressed: () {
-                                              if (!formKey.currentState!
-                                                  .validate())
-                                                return;
-
-                                              Navigator.pop(sheetContext, {
-                                                'name': nameController.text
-                                                    .trim(),
-                                                'phone': phoneController.text
-                                                    .trim(),
-                                                'address': addressController
-                                                    .text
-                                                    .trim(),
-                                              });
-                                            },
-
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor: const Color(
-                                                0xFF087524,
-                                              ),
-                                              foregroundColor: Colors.white,
-                                              elevation: 0,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                            ),
-
-                                            child: Text(
-                                              'SAVE ADDRESS',
-                                              style:
-                                                  GoogleFonts.plusJakartaSans(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                          );
-
-                          // ---- Sheet band — controllers cleanup ----
-                          nameController.dispose();
-                          phoneController.dispose();
-                          addressController.dispose();
-
-                          // ---- SAVE hua → address update ----
-                          if (result != null) {
-                            setState(() {
-                              _addressName = result['name']!;
-                              _addressPhone = result['phone']!;
-                              _addressLine = result['address']!;
-                            });
-
-                            _showMessage('Delivery address updated');
-                          }
-                        }
-
-                        // ==========================================================================
-                        // 2c. ADDRESS TEXT FIELD (sheet ke andar)
-                        // ==========================================================================
-
-                        Widget _buildAddressField({
-                          required TextEditingController controller,
-                          required String label,
-                          required IconData icon,
-                          required TextInputType keyboardType,
-                          int maxLines = 1,
-                          required String? Function(String?) validator,
-                        }) {
-                          return TextFormField(
-                            controller: controller,
-                            keyboardType: keyboardType,
-                            maxLines: maxLines,
-                            validator: validator,
-
-                            decoration: InputDecoration(
-                              labelText: label,
-                              prefixIcon: Icon(
-                                icon,
-                                color: const Color(0xFF087524),
-                              ),
-
-                              filled: true,
-                              fillColor: const Color(0xFFFCF9F7),
-
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFD5E2D3),
-                                ),
-                              ),
-
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFD5E2D3),
-                                ),
-                              ),
-
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFF087524),
-                                ),
-                              ),
-
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(
-                                  color: Color(0xFFC62828),
-                                ),
-                              ),
-                            ),
-                          );
-                        }
                       },
                     ),
 
@@ -894,6 +668,254 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// CHANGE ADDRESS SHEET (bottom sheet ka content — alag widget)
+//
+// Alag widget isliye: controllers + keyboard ka lifecycle apne
+// control mein → framework assertion bug (red error) se bachav
+// ============================================================================
+
+class _ChangeAddressSheet extends StatefulWidget {
+  final String currentName;
+  final String currentPhone;
+  final String currentAddress;
+
+  const _ChangeAddressSheet({
+    required this.currentName,
+    required this.currentPhone,
+    required this.currentAddress,
+  });
+
+  @override
+  State<_ChangeAddressSheet> createState() => _ChangeAddressSheetState();
+}
+
+class _ChangeAddressSheetState extends State<_ChangeAddressSheet> {
+  // ==========================================================================
+  // 1. CONTROLLERS (current values se pre-filled)
+  // ==========================================================================
+
+  late final TextEditingController _nameController = TextEditingController(
+    text: widget.currentName,
+  );
+
+  late final TextEditingController _phoneController = TextEditingController(
+    text: widget.currentPhone,
+  );
+
+  late final TextEditingController _addressController = TextEditingController(
+    text: widget.currentAddress,
+  );
+
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+  // ==========================================================================
+  // 2. DISPOSE — controllers cleanup (widget ke saath)
+  // ==========================================================================
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _addressController.dispose();
+
+    super.dispose();
+  }
+
+  // ==========================================================================
+  // 3. SAVE — validate → keyboard band → values wapas
+  // ==========================================================================
+
+  void _save() {
+    if (!_formKey.currentState!.validate()) return;
+
+    // Keyboard PEHLE band — race condition se bachav
+    FocusScope.of(context).unfocus();
+
+    Navigator.pop(context, {
+      'name': _nameController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'address': _addressController.text.trim(),
+    });
+  }
+
+  // ==========================================================================
+  // 4. TEXT FIELD
+  // ==========================================================================
+
+  Widget _buildField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required TextInputType keyboardType,
+    int maxLines = 1,
+    required String? Function(String?) validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      keyboardType: keyboardType,
+      maxLines: maxLines,
+      validator: validator,
+
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: const Color(0xFF087524)),
+
+        filled: true,
+        fillColor: const Color(0xFFFCF9F7),
+
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5E2D3)),
+        ),
+
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFD5E2D3)),
+        ),
+
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFF087524)),
+        ),
+
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Color(0xFFC62828)),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // 5. MAIN UI — handle → title → 3 fields → SAVE
+  // ==========================================================================
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      // Keyboard-aware padding — APNE context se (safe)
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
+
+        child: Form(
+          key: _formKey,
+
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // --- Drag handle ---
+              Center(
+                child: Container(
+                  width: 45,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFD0D0D0),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // --- Title ---
+              Text(
+                'Change Delivery Address',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // --- Full Name ---
+              _buildField(
+                controller: _nameController,
+                label: 'Full Name',
+                icon: Icons.person_outline,
+                keyboardType: TextInputType.name,
+                validator: (value) {
+                  if (value == null || value.trim().length < 3) {
+                    return 'Please enter a valid name';
+                  }
+                  return null;
+                },
+              ),
+
+              const SizedBox(height: 14),
+
+              // --- Phone ---
+              _buildField(
+                controller: _phoneController,
+                label: 'Phone Number',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+                validator: (value) {
+                  if (value == null || value.trim().length < 10) {
+                    return 'Phone must be at least 10 digits';
+                  }
+                  return null;
+                },
+              ),
+
+              const SizedBox(height: 14),
+
+              // --- Address (multi-line) ---
+              _buildField(
+                controller: _addressController,
+                label: 'Complete Address',
+                icon: Icons.location_on_outlined,
+                keyboardType: TextInputType.streetAddress,
+                maxLines: 3,
+                validator: (value) {
+                  if (value == null || value.trim().length < 10) {
+                    return 'Please enter complete address';
+                  }
+                  return null;
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+              // --- SAVE button ---
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+
+                child: ElevatedButton(
+                  onPressed: _save,
+
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF087524),
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+
+                  child: Text(
+                    'SAVE ADDRESS',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
