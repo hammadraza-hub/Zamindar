@@ -27,6 +27,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String _addressPhone = '+92 300 1234567';
   String _addressLine = 'Haq Bahu Farm, Chak 45-SB, Sargodha, Punjab';
 
+  /// Selected payment — 'bank_transfer' ya 'cod'
+  /// (web jaisa default: Direct Bank Transfer)
+  String _selectedPayment = 'bank_transfer';
   // ==========================================================================
   // 2. HELPERS
   // ==========================================================================
@@ -114,12 +117,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     // (3) CLEAR — order complete
     cart.clearCart();
 
-    // (4) OrderSuccess — real data ke saath
+    // (4) OrderSuccess — real data + SELECTED payment method
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            OrderSuccessScreen(items: orderedItems, totalAmount: orderTotal),
+        builder: (_) => OrderSuccessScreen(
+          items: orderedItems,
+          totalAmount: orderTotal,
+
+          // Jo method select kiya — wahi success par dikhega
+          paymentMethod: _selectedPayment == 'cod'
+              ? 'Cash on Delivery'
+              : 'Direct Bank Transfer',
+        ),
       ),
     );
   }
@@ -561,34 +571,31 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
                     const SizedBox(height: 12),
 
-                    // COD — selected
+                    // --- Direct Bank Transfer (web ka default) ---
                     _buildPaymentOption(
-                      icon: Icons.payments_outlined,
-                      title: 'Cash on Delivery (COD)',
-                      subtitle: 'Pay cash when order arrives',
-                      isSelected: true,
-                      onTap: () {},
-                    ),
-
-                    // JazzCash — coming soon
-                    _buildPaymentOption(
-                      icon: Icons.account_balance_wallet_outlined,
-                      title: 'JazzCash',
-                      subtitle: 'Coming soon',
-                      isSelected: false,
+                      icon: Icons.account_balance_outlined,
+                      title: 'Direct Bank Transfer',
+                      subtitle:
+                          'Pay directly into our bank account — '
+                          'use Order ID as reference',
+                      isSelected: _selectedPayment == 'bank_transfer',
                       onTap: () {
-                        _showMessage('JazzCash coming soon');
+                        setState(() {
+                          _selectedPayment = 'bank_transfer';
+                        });
                       },
                     ),
 
-                    // Easypaisa — coming soon
+                    // --- Cash on Delivery ---
                     _buildPaymentOption(
-                      icon: Icons.account_balance_outlined,
-                      title: 'Easypaisa',
-                      subtitle: 'Coming soon',
-                      isSelected: false,
+                      icon: Icons.payments_outlined,
+                      title: 'Cash on Delivery',
+                      subtitle: 'Pay with cash upon delivery',
+                      isSelected: _selectedPayment == 'cod',
                       onTap: () {
-                        _showMessage('Easypaisa coming soon');
+                        setState(() {
+                          _selectedPayment = 'cod';
+                        });
                       },
                     ),
 

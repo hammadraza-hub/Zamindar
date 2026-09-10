@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/cart_provider.dart';
 import 'checkout_screen.dart';
 import 'account_screen.dart';
+import 'search_screen.dart';
 
 // ============================================================================
 // CART SCREEN
@@ -358,7 +359,10 @@ class _CartScreenState extends State<CartScreen> {
 
                   IconButton(
                     onPressed: () {
-                      _showMessage('Search clicked');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SearchScreen()),
+                      );
                     },
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(

@@ -21,16 +21,15 @@ import 'main_navigation_screen.dart';
 // ============================================================================
 
 class OrderSuccessScreen extends StatefulWidget {
-  /// Order ke items (cart se copy kiye gaye)
   final List<CartItem> items;
-
-  /// Order ki total amount
   final int totalAmount;
+  final String paymentMethod; // ← NAYA
 
   const OrderSuccessScreen({
     super.key,
     required this.items,
     required this.totalAmount,
+    this.paymentMethod = 'Cash on Delivery', // ← NAYA
   });
 
   @override
@@ -347,7 +346,7 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
                       // Payment Method
                       _detailRow(
                         label: 'Payment Method',
-                        value: 'Cash on Delivery',
+                        value: widget.paymentMethod, // ← fixed value ki jagah
                         icon: Icons.payments_outlined,
                       ),
 

@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 
 import '../services/cart_provider.dart';
 import 'account_screen.dart';
+import 'categories_screen.dart';
+import 'search_screen.dart';
 
 // ============================================================================
 // HOME SCREEN
@@ -39,27 +41,60 @@ class _HomeScreenState extends State<HomeScreen> {
   int get _pageCount => _banners.length + 1;
 
   // ==========================================================================
-  // 2. WHAT'S NEW PRODUCTS DATA
+  // 2. WHAT'S NEW PRODUCTS (zamindar.co ke REAL products)
+  //
+  // Images abhi placeholder hain — API aane par
+  // real images aa jayengi
   // ==========================================================================
 
   final List<Map<String, dynamic>> _whatsNewProducts = [
     {
-      'id': 'evergrow-bio',
-      'name': 'EverGrow Bio',
-      'price': 1250,
+      'id': 'subah-800ml',
+      'name': 'Subah – 800 Mls',
+      'price': 780,
       'image': 'assets/images/whats_new2img (1).png',
     },
     {
-      'id': 'hybrid-gold-corn',
-      'name': 'Hybrid Gold Corn',
-      'price': 3400,
+      'id': 'mithu-800ml',
+      'name': 'Mithu – 800 Mls',
+      'price': 1499,
       'image': 'assets/images/whats_new2img (2).png',
     },
     {
-      'id': 'Acephate 75% SP(1kg)',
-      'name': 'Acephate 75% SP (1kg)',
-      'price': 2500,
+      'id': 'mithu-500ml',
+      'name': 'Mithu – 500 Mls',
+      'price': 1099,
       'image': 'assets/images/whats_new3img.png',
+    },
+    {
+      'id': 'mithu-400ml',
+      'name': 'Mithu – 400 Mls',
+      'price': 899,
+      'image': 'assets/images/whats_new4img.png',
+    },
+    {
+      'id': 'mithu-1ltr',
+      'name': 'Mithu – 1 Ltr',
+      'price': 1799,
+      'image': 'assets/images/whats_new5img.png',
+    },
+    {
+      'id': 'orange-amine-500ml',
+      'name': 'Orange Amine – 500 Mls',
+      'price': 880,
+      'image': 'assets/images/whats_new2img (1).png',
+    },
+    {
+      'id': 'orange-amine-1ltr',
+      'name': 'Orange Amine – 1 Ltr',
+      'price': 1450,
+      'image': 'assets/images/whats_new3img.png',
+    },
+    {
+      'id': 'zehrelli-400ml',
+      'name': 'Zehrelli – 400 Mls',
+      'price': 640,
+      'image': 'assets/images/whats_new4img.png',
     },
   ];
 
@@ -167,7 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 9. CATEGORY WIDGET — icon circle + name
+  // 9. CATEGORY WIDGET — fixed width (horizontal scroll ke liye)
   // ==========================================================================
 
   Widget _buildCategory({
@@ -175,10 +210,12 @@ class _HomeScreenState extends State<HomeScreen> {
     required String title,
     required VoidCallback onTap,
   }) {
-    return Expanded(
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+
+      child: SizedBox(
+        width: 84,
 
         child: Column(
           children: [
@@ -186,10 +223,12 @@ class _HomeScreenState extends State<HomeScreen> {
             Container(
               width: 64,
               height: 64,
+
               decoration: const BoxDecoration(
                 color: Color(0xFFF0EEEE),
                 shape: BoxShape.circle,
               ),
+
               child: Icon(icon, size: 27, color: const Color(0xFF087524)),
             ),
 
@@ -199,6 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(
               title,
               textAlign: TextAlign.center,
+
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 12,
                 fontWeight: FontWeight.w400,
@@ -408,9 +448,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
               // Review Text
               Text(
-                '"High quality products that really\n'
-                'improved my crop yield. The delivery was\n'
-                'fast and professional."',
+                '"Zamindar\'s agricultural medicines have\n'
+                'truly transformed my farm. My crops are\n'
+                'healthier, and the free delivery is a plus!"',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 14,
                   fontStyle: FontStyle.italic,
@@ -509,7 +549,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Search Button
                   IconButton(
                     onPressed: () {
-                      _showMessage('Search icon clicked');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SearchScreen()),
+                      );
                     },
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
@@ -642,45 +685,57 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-              const SizedBox(height: 16),
+              SizedBox(
+                height: 120,
 
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildCategory(
-                    icon: Icons.eco_outlined,
-                    title: 'PGRs &\nMicronutrients',
-                    onTap: () {
-                      _showCategoryMessage('PGRs & Micronutrients');
-                    },
-                  ),
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
 
-                  _buildCategory(
-                    icon: Icons.agriculture_outlined,
-                    title: 'Herbicides',
-                    onTap: () {
-                      _showCategoryMessage('Herbicides');
-                    },
-                  ),
+                  children: [
+                    _buildCategory(
+                      icon: Icons.eco_outlined,
+                      title: 'PGRs &\nMicronutrients',
+                      onTap: () {
+                        _showCategoryMessage('PGRs & Micronutrients');
+                      },
+                    ),
 
-                  _buildCategory(
-                    icon: Icons.science_outlined,
-                    title: 'Fungicides',
-                    onTap: () {
-                      _showCategoryMessage('Fungicides');
-                    },
-                  ),
+                    _buildCategory(
+                      icon: Icons.agriculture_outlined,
+                      title: 'Herbicides',
+                      onTap: () {
+                        _showCategoryMessage('Herbicides');
+                      },
+                    ),
 
-                  _buildCategory(
-                    icon: Icons.bug_report_outlined,
-                    title: 'Insecticides',
-                    onTap: () {
-                      _showCategoryMessage('Insecticides');
-                    },
-                  ),
-                ],
+                    _buildCategory(
+                      icon: Icons.science_outlined,
+                      title: 'Fungicides',
+                      onTap: () {
+                        _showCategoryMessage('Fungicides');
+                      },
+                    ),
+
+                    _buildCategory(
+                      icon: Icons.bug_report_outlined,
+                      title: 'Insecticides',
+                      onTap: () {
+                        _showCategoryMessage('Insecticides');
+                      },
+                    ),
+
+                    // 5th category — NAYA (site ke mutabiq)
+                    _buildCategory(
+                      icon: Icons.grass,
+                      title: 'Seed Care',
+                      onTap: () {
+                        _showCategoryMessage('Seed Care');
+                      },
+                    ),
+                  ],
+                ),
               ),
-
               const SizedBox(height: 30),
 
               // =================================================================
@@ -697,11 +752,17 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
 
-                  // See All
+                  // See All → Categories screen (saare products)
                   InkWell(
                     onTap: () {
-                      _showMessage('See All clicked');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CategoriesScreen(),
+                        ),
+                      );
                     },
+
                     child: Text(
                       'See All',
                       style: GoogleFonts.plusJakartaSans(
@@ -769,13 +830,21 @@ class _HomeScreenState extends State<HomeScreen> {
                   physics: const BouncingScrollPhysics(),
 
                   children: [
-                    _buildBrandChip('AgroPlus'),
+                    _buildBrandChip('Bayer'),
                     const SizedBox(width: 12),
-                    _buildBrandChip('GreenField'),
+                    _buildBrandChip('Syngenta'),
                     const SizedBox(width: 12),
-                    _buildBrandChip('SeedCo'),
+                    _buildBrandChip('Evyol Group'),
                     const SizedBox(width: 12),
-                    _buildBrandChip('FarmGrow'),
+                    _buildBrandChip('Orange Production'),
+                    const SizedBox(width: 12),
+                    _buildBrandChip('Haji Sons'),
+                    const SizedBox(width: 12),
+                    _buildBrandChip('Kanzo AG'),
+                    const SizedBox(width: 12),
+                    _buildBrandChip('Sakata Seeds'),
+                    const SizedBox(width: 12),
+                    _buildBrandChip('Sohni Dharti'),
                   ],
                 ),
               ),

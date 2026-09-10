@@ -4,13 +4,13 @@ import 'package:provider/provider.dart';
 
 import '../services/cart_provider.dart';
 import 'account_screen.dart';
+import 'search_screen.dart';
 
 // ============================================================================
 // CATEGORIES SCREEN
 //
-// Category (Insecticides) ke products grid format mein dikhte hain.
-// Har product ka [+] button product ko SHARED CartProvider mein add
-// karta hai — yani Home aur Categories ka cart EK hi hai.
+// Category chips + Company filters + Price slider + Sort
+// + Explore More (scroll ke saath — CustomScrollView)
 // ============================================================================
 
 class CategoriesScreen extends StatefulWidget {
@@ -23,18 +23,15 @@ class CategoriesScreen extends StatefulWidget {
 class _CategoriesScreenState extends State<CategoriesScreen> {
   // ==========================================================================
   // 1. PRODUCTS DATA
-  //
-  // Har product ka unique 'id' zaroori hai:
-  // - CartProvider id se product ko pehchanta hai
-  // - Same product dobara add karne par naya card nahi banta,
-  //   sirf uski quantity barh jati hai
   // ==========================================================================
 
   final List<Map<String, dynamic>> products = [
+    // ---- INSECTICIDES ----
     {
       'id': 'confidor-200-sl',
       'name': 'Confidor 200 SL',
       'brand': 'Bayer',
+      'category': 'Insecticides',
       'price': 1850,
       'oldPrice': 2100,
       'image': 'assets/images/whats_new3img.png',
@@ -43,6 +40,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       'id': 'belt-480-sc',
       'name': 'Belt 480 SC',
       'brand': 'Bayer',
+      'category': 'Insecticides',
       'price': 1240,
       'image': 'assets/images/whats_new4img.png',
     },
@@ -50,6 +48,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       'id': 'movento-240-sc',
       'name': 'Movento 240 SC',
       'brand': 'Bayer',
+      'category': 'Insecticides',
       'price': 980,
       'image': 'assets/images/whats_new5img.png',
     },
@@ -57,49 +56,207 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       'id': 'decis-100-ec',
       'name': 'Decis 100 EC',
       'brand': 'Bayer',
+      'category': 'Insecticides',
       'price': 650,
+      'image': 'assets/images/whats_new2img (1).png',
+    },
+    {
+      'id': 'actara-25-wg',
+      'name': 'ACTARA 25 WG (24 GM)',
+      'brand': 'Syngenta',
+      'category': 'Insecticides',
+      'price': 500,
+      'image': 'assets/images/whats_new5img.png',
+    },
+    {
+      'id': 'ampligo-150-zc',
+      'name': 'AMPLIGO 150 ZC (160 Ml)',
+      'brand': 'Syngenta',
+      'category': 'Insecticides',
+      'price': 2800,
+      'image': 'assets/images/whats_new2img (2).png',
+    },
+
+    // ---- HERBICIDES ----
+    {
+      'id': 'orange-amine-500ml',
+      'name': 'Orange Amine – 500 Mls',
+      'brand': 'Orange Production',
+      'category': 'Herbicides',
+      'price': 880,
+      'image': 'assets/images/whats_new2img (1).png',
+    },
+    {
+      'id': 'adengo-xtra-132ml',
+      'name': 'Adengo Xtra 132ml',
+      'brand': 'Bayer',
+      'category': 'Herbicides',
+      'price': 2700,
+      'image': 'assets/images/whats_new4img.png',
+    },
+
+    // ---- FUNGICIDES ----
+    {
+      'id': 'aliette-250g',
+      'name': 'Aliette 80% WP 250g',
+      'brand': 'Bayer',
+      'category': 'Fungicides',
+      'price': 1250,
+      'image': 'assets/images/whats_new3img.png',
+    },
+    {
+      'id': 'amistar-top-200ml',
+      'name': 'Amistar Top 325 SC',
+      'brand': 'Syngenta',
+      'category': 'Fungicides',
+      'price': 1550,
+      'image': 'assets/images/whats_new5img.png',
+    },
+
+    // ---- PGRs ----
+    {
+      'id': 'ambition-500ml',
+      'name': 'Ambition 500ml',
+      'brand': 'Bayer',
+      'category': 'PGRs',
+      'price': 1900,
+      'image': 'assets/images/whats_new2img (2).png',
+    },
+    {
+      'id': 'subah-800ml',
+      'name': 'Subah – 800 Mls',
+      'brand': 'Sohni Dharti',
+      'category': 'PGRs',
+      'price': 780,
+      'image': 'assets/images/whats_new4img.png',
+    },
+
+    // ---- SEED CARE ----
+    {
+      'id': 'hybrid-corn-seeds',
+      'name': 'Hybrid Corn Seeds (1kg)',
+      'brand': 'Sakata Seeds',
+      'category': 'Seed Care',
+      'price': 3500,
+      'image': 'assets/images/whats_new5img.png',
+    },
+    {
+      'id': 'wheat-seeds',
+      'name': 'Wheat Seeds (Certified)',
+      'brand': 'Sohni Dharti',
+      'category': 'Seed Care',
+      'price': 1200,
       'image': 'assets/images/whats_new2img (1).png',
     },
   ];
 
   // ==========================================================================
+  // 1b. MORE PRODUCTS (Explore More)
+  // ==========================================================================
+
+  final List<Map<String, dynamic>> _nextBatch = [
+    {
+      'id': 'mithu-800ml',
+      'name': 'Mithu – 800 Mls',
+      'brand': 'Orange Production',
+      'category': 'Insecticides',
+      'price': 1499,
+      'image': 'assets/images/whats_new4img.png',
+    },
+    {
+      'id': 'zehrelli-400ml',
+      'name': 'Zehrelli – 400 Mls',
+      'brand': 'Sohni Dharti',
+      'category': 'Insecticides',
+      'price': 640,
+      'image': 'assets/images/whats_new2img (1).png',
+    },
+    {
+      'id': 'acetamiprid-20-sl',
+      'name': 'Acetamiprid 20% SL 250ml',
+      'brand': 'Evyol Group',
+      'category': 'Insecticides',
+      'price': 1540,
+      'image': 'assets/images/whats_new5img.png',
+    },
+    {
+      'id': 'orange-amine-1ltr',
+      'name': 'Orange Amine – 1 Ltr',
+      'brand': 'Orange Production',
+      'category': 'Herbicides',
+      'price': 1450,
+      'image': 'assets/images/whats_new3img.png',
+    },
+    {
+      'id': 'antracol-70wp',
+      'name': 'Antracol 70 WP 1kg',
+      'brand': 'Bayer',
+      'category': 'Fungicides',
+      'price': 3800,
+      'image': 'assets/images/whats_new4img.png',
+    },
+    {
+      'id': 'agroquat-20-sl',
+      'name': 'Agroquat 20 SL 1L',
+      'brand': 'Evyol Group',
+      'category': 'Herbicides',
+      'price': 875,
+      'image': 'assets/images/whats_new5img.png',
+    },
+  ];
+
+  bool get _hasMoreProducts => _nextBatch.isNotEmpty;
+
+  // ==========================================================================
   // 2. FILTER / SORT DATA
   // ==========================================================================
 
-  /// Dropdown ki current sort value
   String selectedSort = 'Popularity';
 
-  /// User ke selected (active) filters
   final List<String> selectedFilters = [];
 
-  /// Company filter options
   final List<String> companyFilters = [
     'Bayer',
     'Syngenta',
-    'FMC',
-    'BASF',
-    'Corteva',
-  ];
-
-  /// Price range filter options
-  final List<String> priceFilters = [
-    'Rs 0 - 500',
-    'Rs 500 - 2000',
-    'Rs 2000 - 5000',
-    'Rs 5000+',
+    'Evyol Group',
+    'Orange Production',
+    'Haji Sons',
+    'Kanzo AG',
+    'Sakata Seeds',
+    'Sohni Dharti',
   ];
 
   // ==========================================================================
+  // 2b. CATEGORY STATE
+  // ==========================================================================
+
+  String _selectedCategory = 'All';
+
+  // ==========================================================================
+  // 2c. PRICE RANGE STATE
+  // ==========================================================================
+
+  static const double _priceMinLimit = 0;
+  static const double _priceMaxLimit = 5000;
+
+  RangeValues _priceRange = const RangeValues(_priceMinLimit, _priceMaxLimit);
+
+  bool get _isPriceFilterActive =>
+      _priceRange.start > _priceMinLimit || _priceRange.end < _priceMaxLimit;
+
+  // ==========================================================================
   // 3. FILTERED + SORTED PRODUCTS
-  //
-  // Har rebuild par fresh result:
-  //   1) Company filter  →  2) Price filter  →  3) Sort
   // ==========================================================================
 
   List<Map<String, dynamic>> get filteredProducts {
     List<Map<String, dynamic>> result = List<Map<String, dynamic>>.from(
       products,
     );
+
+    // ---- Category Filter ----
+    if (_selectedCategory != 'All') {
+      result = result.where((p) => p['category'] == _selectedCategory).toList();
+    }
 
     // ---- Company Filter ----
     final selectedCompanies = selectedFilters
@@ -112,39 +269,20 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           .toList();
     }
 
-    // ---- Price Filter ----
-    final selectedPrices = selectedFilters
-        .where((filter) => priceFilters.contains(filter))
-        .toList();
-
-    if (selectedPrices.isNotEmpty) {
+    // ---- Price Filter (slider) ----
+    if (_isPriceFilterActive) {
       result = result.where((product) {
         final int price = product['price'] as int;
 
-        return selectedPrices.any((filter) {
-          if (filter == 'Rs 0 - 500') {
-            return price >= 0 && price <= 500;
-          }
-          if (filter == 'Rs 500 - 2000') {
-            return price >= 500 && price <= 2000;
-          }
-          if (filter == 'Rs 2000 - 5000') {
-            return price >= 2000 && price <= 5000;
-          }
-          if (filter == 'Rs 5000+') {
-            return price >= 5000;
-          }
-          return false;
-        });
+        return price >= _priceRange.start && price <= _priceRange.end;
       }).toList();
     }
 
-    // ---- Sort: Price Low → High ----
+    // ---- Sort ----
     if (selectedSort == 'Price Low') {
       result.sort((a, b) => (a['price'] as int).compareTo(b['price'] as int));
     }
 
-    // ---- Sort: Price High → Low ----
     if (selectedSort == 'Price High') {
       result.sort((a, b) => (b['price'] as int).compareTo(a['price'] as int));
     }
@@ -153,7 +291,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 4. SNACKBAR MESSAGE
+  // 4. SNACKBAR
   // ==========================================================================
 
   void _showMessage(String message) {
@@ -172,10 +310,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 5. ADD TO CART (SHARED)
-  //
-  // context.read<CartProvider>() → tap par hi call hota hai.
-  // Home screen ka exactly same pattern.
+  // 5. ADD TO CART
   // ==========================================================================
 
   void _addToCart(Map<String, dynamic> product) {
@@ -190,10 +325,61 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 6. ACTIVE FILTER CHIP
-  //
-  // Selected filter screen par chip ki shakal mein dikhta hai,
-  // cross (X) tap karne par remove ho jata hai
+  // 5b. LOAD MORE
+  // ==========================================================================
+
+  void _loadMoreProducts() {
+    if (_nextBatch.isEmpty) {
+      _showMessage('All products loaded');
+      return;
+    }
+
+    setState(() {
+      products.addAll(_nextBatch);
+      _nextBatch.clear();
+    });
+
+    _showMessage('More products loaded');
+  }
+
+  // ==========================================================================
+  // 6. CATEGORY CHIP
+  // ==========================================================================
+
+  Widget _buildCategoryChip(String name) {
+    final bool isSelected = _selectedCategory == name;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _selectedCategory = name;
+        });
+      },
+
+      borderRadius: BorderRadius.circular(30),
+
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF087524) : const Color(0xFFF0EEEE),
+          borderRadius: BorderRadius.circular(30),
+        ),
+
+        child: Text(
+          name,
+          style: GoogleFonts.plusJakartaSans(
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+            color: isSelected ? Colors.white : const Color(0xFF1B1C1C),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // 6b. FILTER CHIP
   // ==========================================================================
 
   Widget _buildFilterChip({
@@ -220,7 +406,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
           const SizedBox(width: 4),
 
-          // Remove (X) button
           InkWell(
             onTap: onRemove,
             borderRadius: BorderRadius.circular(20),
@@ -232,11 +417,46 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 7. FILTER OPTION (Bottom Sheet ke andar)
-  //
-  // Tap karne par select/deselect hota hai
-  // LEKIN sheet band NAHI hoti — user multiple filters select
-  // kar sakta hai, phir khud "Done" button se band kare
+  // 6c. PRICE CHIP
+  // ==========================================================================
+
+  Widget _buildPriceChip() {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.only(left: 12, right: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFFDCE8DA),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Rs ${_priceRange.start.round()} - ${_priceRange.end.round()}',
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              color: const Color(0xFF087524),
+            ),
+          ),
+
+          const SizedBox(width: 4),
+
+          InkWell(
+            onTap: () {
+              setState(() {
+                _priceRange = const RangeValues(_priceMinLimit, _priceMaxLimit);
+              });
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: const Icon(Icons.close, size: 16, color: Color(0xFF087524)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // 7. FILTER OPTION (sheet)
   // ==========================================================================
 
   Widget _filterOption(
@@ -247,7 +467,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
     return InkWell(
       onTap: () {
-        // 1) Screen ki state update (filters live apply hote hain)
         setState(() {
           if (isSelected) {
             selectedFilters.remove(text);
@@ -256,14 +475,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           }
         });
 
-        // 2) Sheet ki state update (highlight refresh)
-        //    Ye zaroori hai — sheet parent ke setState
-        //    se rebuild nahi hoti
         setSheetState(() {});
       },
+
       borderRadius: BorderRadius.circular(20),
+
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFFDCE8DA) : const Color(0xFFF0F3EE),
           borderRadius: BorderRadius.circular(20),
@@ -273,6 +492,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 : const Color(0xFFD5E2D3),
           ),
         ),
+
         child: Text(
           text,
           style: GoogleFonts.plusJakartaSans(
@@ -288,18 +508,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   // ==========================================================================
   // 8. PRODUCT CARD
-  //
-  // Layout: [Image] → [Brand] → [Name] → [Price + (+) Button]
-  //
-  // IMPORTANT: context.watch<CartProvider>() — cart change hone par
-  // button par quantity khud update hoti hai
   // ==========================================================================
 
   Widget _buildProductCard(Map<String, dynamic> product) {
-    // Cart ko watch karo (quantity live update ke liye)
     final CartProvider cart = context.watch<CartProvider>();
 
-    // Is product ki current cart quantity
     int quantityInCart = 0;
 
     for (final item in cart.items) {
@@ -324,9 +537,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --------------------------------------------------------------
-          // Product Image
-          // --------------------------------------------------------------
+          // --- Image ---
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
             child: Image.asset(
@@ -337,9 +548,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             ),
           ),
 
-          // --------------------------------------------------------------
-          // Product Details
-          // --------------------------------------------------------------
+          // --- Details ---
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             child: Column(
@@ -372,9 +581,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                 Row(
                   children: [
-                    // ------------------------------------------------------
-                    // Price (new + old)
-                    // ------------------------------------------------------
+                    // --- Price ---
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,7 +595,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                             ),
                           ),
 
-                          // Purana price (sirf discount wale par)
                           if (product['oldPrice'] != null)
                             Text(
                               'Rs ${product['oldPrice']}',
@@ -402,13 +608,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                       ),
                     ),
 
-                    // ------------------------------------------------------
-                    // ADD TO CART (+) BUTTON
-                    //
-                    // Cart mein nahi hai → sirf [+] icon
-                    // Cart mein hai       → quantity number
-                    // Tap karne par       → quantity +1 (shared cart)
-                    // ------------------------------------------------------
+                    // --- (+) Button ---
                     InkWell(
                       onTap: () => _addToCart(product),
                       borderRadius: BorderRadius.circular(50),
@@ -447,13 +647,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 9. FILTER BOTTOM SHEET
-  //
-  // Company + Price Range filters. Sheet har tap par band NAHI
-  // hoti — user multiple filters select kare, phir:
-  //   - "Done" button se band kare
-  //   - ya neeche swipe kare / bahar tap kare
-  // Filters live apply hote hain (chips + products foran update)
+  // 9. FILTER SHEET
   // ==========================================================================
 
   void _showFilterSheet() {
@@ -465,9 +659,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (sheetContext) {
-        // StatefulBuilder: sheet ke andar selection highlight
-        // update karne ke liye (sheet parent ke setState
-        // se rebuild nahi hoti)
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
             return SafeArea(
@@ -477,7 +668,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Drag handle
+                    // --- Handle ---
                     Center(
                       child: Container(
                         width: 45,
@@ -491,7 +682,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                     const SizedBox(height: 20),
 
-                    // Title + selected count
+                    // --- Title ---
                     Row(
                       children: [
                         Text(
@@ -517,7 +708,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                     const SizedBox(height: 24),
 
-                    // ---- Company Filters ----
+                    // --- Company ---
                     Text(
                       'Company',
                       style: GoogleFonts.plusJakartaSans(
@@ -538,40 +729,67 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                     const SizedBox(height: 26),
 
-                    // ---- Price Filters ----
-                    Text(
-                      'Price Range',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    // --- Price Slider ---
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Price Range',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+
+                        Text(
+                          'Rs ${_priceRange.start.round()}'
+                          ' - Rs ${_priceRange.end.round()}',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF087524),
+                          ),
+                        ),
+                      ],
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 4),
 
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: priceFilters
-                          .map((f) => _filterOption(f, setSheetState))
-                          .toList(),
+                    RangeSlider(
+                      values: _priceRange,
+                      min: _priceMinLimit,
+                      max: _priceMaxLimit,
+                      divisions: 50,
+                      activeColor: const Color(0xFF087524),
+                      inactiveColor: const Color(0xFFD5E2D3),
+                      labels: RangeLabels(
+                        'Rs ${_priceRange.start.round()}',
+                        'Rs ${_priceRange.end.round()}',
+                      ),
+                      onChanged: (values) {
+                        setSheetState(() {});
+                        setState(() {
+                          _priceRange = values;
+                        });
+                      },
                     ),
 
                     const SizedBox(height: 26),
 
-                    // ---- CLEAR ALL + DONE ----
+                    // --- Clear All + Done ---
                     Row(
                       children: [
-                        // Clear All
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () {
-                              // Screen state clear
                               setState(() {
                                 selectedFilters.clear();
+                                _priceRange = const RangeValues(
+                                  _priceMinLimit,
+                                  _priceMaxLimit,
+                                );
                               });
 
-                              // Sheet highlight reset
                               setSheetState(() {});
                             },
                             style: OutlinedButton.styleFrom(
@@ -594,7 +812,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                         const SizedBox(width: 12),
 
-                        // Done — sheet yahin se band hogi
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () => Navigator.pop(sheetContext),
@@ -632,18 +849,15 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   // ==========================================================================
   // 10. MAIN UI
-  //
-  // Structure (upar se neeche):
-  //   App Bar → Category Header → Filter/Sort → Products Grid
-  //   → Explore More Button → Results Count
-  //
-  // NOTE: BottomNavigationBar yahan intentional nahi hai —
-  // MainNavigationScreen handle karta hai
   // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
     final visibleProducts = filteredProducts;
+
+    final String screenTitle = _selectedCategory == 'All'
+        ? 'All Products'
+        : _selectedCategory;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFCF9F7),
@@ -652,13 +866,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         child: Column(
           children: [
             // ================================================================
-            // APP BAR — Logo + Title + Search + Profile
+            // APP BAR
             // ================================================================
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               child: Row(
                 children: [
-                  // Logo
                   Image.asset(
                     'assets/images/zamindar_logo.png',
                     width: 70,
@@ -668,7 +881,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                   const SizedBox(width: 8),
 
-                  // Screen title
                   Text(
                     'Categories',
                     style: GoogleFonts.plusJakartaSans(
@@ -680,10 +892,12 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                   const Spacer(),
 
-                  // Search
                   IconButton(
                     onPressed: () {
-                      _showMessage('Search clicked');
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const SearchScreen()),
+                      );
                     },
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(
@@ -699,7 +913,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                   const SizedBox(width: 14),
 
-                  // Profile
                   InkWell(
                     onTap: () {
                       Navigator.push(
@@ -731,73 +944,71 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             const Divider(height: 1, thickness: 1, color: Color(0xFFF0EEEE)),
 
             // ================================================================
-            // CATEGORY HEADER — Back + Title + Product Count
+            // HEADER — Centered Title + Count
             // ================================================================
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+
+              child: Column(
                 children: [
-                  // Back arrow
-                  InkWell(
-                    onTap: () {
-                      _showMessage('Use Home tab to go back');
-                    },
-                    borderRadius: BorderRadius.circular(30),
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(
-                        Icons.arrow_back,
-                        size: 25,
-                        color: Color(0xFF087524),
-                      ),
+                  Text(
+                    screenTitle,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF1B1C1C),
                     ),
                   ),
 
-                  const SizedBox(width: 18),
+                  const SizedBox(height: 2),
 
-                  // Title + count
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Insecticides',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w500,
-                            color: const Color(0xFF1B1C1C),
-                          ),
-                        ),
-
-                        const SizedBox(height: 2),
-
-                        Text(
-                          '${visibleProducts.length} Products available',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            color: const Color(0xFF666666),
-                          ),
-                        ),
-                      ],
+                  Text(
+                    '${visibleProducts.length} Products available',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 12,
+                      color: const Color(0xFF666666),
                     ),
-                  ),
-
-                  // Search
-                  IconButton(
-                    onPressed: () {
-                      _showMessage('Search products clicked');
-                    },
-                    icon: const Icon(Icons.search, size: 27),
                   ),
                 ],
               ),
             ),
 
-            const SizedBox(height: 22),
+            const SizedBox(height: 16),
 
             // ================================================================
-            // FILTER + SORT ROW (aur Active Filter Chips)
+            // CATEGORY CHIPS
+            // ================================================================
+            SizedBox(
+              height: 42,
+
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+
+                children: [
+                  _buildCategoryChip('All'),
+                  const SizedBox(width: 10),
+                  _buildCategoryChip('Insecticides'),
+                  const SizedBox(width: 10),
+                  _buildCategoryChip('Herbicides'),
+                  const SizedBox(width: 10),
+                  _buildCategoryChip('Fungicides'),
+                  const SizedBox(width: 10),
+                  _buildCategoryChip('PGRs'),
+                  const SizedBox(width: 10),
+                  _buildCategoryChip('Seed Care'),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // ================================================================
+            // FILTER + SORT ROW
             // ================================================================
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -806,7 +1017,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                 children: [
                   Row(
                     children: [
-                      // ---- Filter Button ----
                       InkWell(
                         onTap: _showFilterSheet,
                         borderRadius: BorderRadius.circular(30),
@@ -842,7 +1052,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                       const SizedBox(width: 12),
 
-                      // ---- Sort Dropdown ----
                       Expanded(
                         child: Container(
                           height: 42,
@@ -892,38 +1101,44 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     ],
                   ),
 
-                  // ---- Active Filter Chips + Clear All ----
-                  if (selectedFilters.isNotEmpty) ...[
+                  // ---- Active Filter Chips ----
+                  if (selectedFilters.isNotEmpty || _isPriceFilterActive) ...[
                     const SizedBox(height: 14),
 
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Chips
                         Expanded(
                           child: Wrap(
                             spacing: 8,
                             runSpacing: 8,
-                            children: selectedFilters.map((filter) {
-                              return _buildFilterChip(
-                                text: filter,
-                                onRemove: () {
-                                  setState(() {
-                                    selectedFilters.remove(filter);
-                                  });
-                                },
-                              );
-                            }).toList(),
+                            children: [
+                              if (_isPriceFilterActive) _buildPriceChip(),
+
+                              ...selectedFilters.map((filter) {
+                                return _buildFilterChip(
+                                  text: filter,
+                                  onRemove: () {
+                                    setState(() {
+                                      selectedFilters.remove(filter);
+                                    });
+                                  },
+                                );
+                              }),
+                            ],
                           ),
                         ),
 
                         const SizedBox(width: 8),
 
-                        // Clear all
                         InkWell(
                           onTap: () {
                             setState(() {
                               selectedFilters.clear();
+                              _priceRange = const RangeValues(
+                                _priceMinLimit,
+                                _priceMaxLimit,
+                              );
                             });
                           },
                           child: Padding(
@@ -948,97 +1163,121 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             const SizedBox(height: 24),
 
             // ================================================================
-            // PRODUCTS GRID
+            // PRODUCTS GRID + EXPLORE MORE (scroll ke saath)
             // ================================================================
             Expanded(
-              child: Column(
-                children: [
-                  Expanded(
-                    child: visibleProducts.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No products found',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 15,
-                                color: const Color(0xFF666666),
-                              ),
-                            ),
-                          )
-                        : Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
-                            child: GridView.builder(
-                              padding: const EdgeInsets.only(bottom: 15),
-                              itemCount: visibleProducts.length,
-                              gridDelegate:
-                                  const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    crossAxisSpacing: 14,
-                                    mainAxisSpacing: 14,
-                                    mainAxisExtent: 270,
-                                  ),
-                              itemBuilder: (context, index) {
-                                return _buildProductCard(
-                                  visibleProducts[index],
-                                );
-                              },
-                            ),
-                          ),
-                  ),
-
-                  // ==============================================================
-                  // EXPLORE MORE + RESULTS COUNT
-                  // ==============================================================
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 42),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: OutlinedButton(
-                        onPressed: () {
-                          _showMessage('Explore more products');
-                        },
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF087524),
-                          side: const BorderSide(color: Color(0xFF087524)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              'Explore More Products',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFF087524),
-                              ),
-                            ),
-
-                            const SizedBox(width: 8),
-
-                            const Icon(Icons.keyboard_arrow_down, size: 20),
-                          ],
+              child: visibleProducts.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No products found',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          color: const Color(0xFF666666),
                         ),
                       ),
+                    )
+                  : CustomScrollView(
+                      slivers: [
+                        // ---- Products Grid ----
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(24, 0, 24, 15),
+
+                          sliver: SliverGrid(
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 14,
+                                  mainAxisSpacing: 14,
+                                  mainAxisExtent: 270,
+                                ),
+
+                            delegate: SliverChildBuilderDelegate((
+                              context,
+                              index,
+                            ) {
+                              return _buildProductCard(visibleProducts[index]);
+                            }, childCount: visibleProducts.length),
+                          ),
+                        ),
+
+                        // ---- Explore More (scroll ke END mein) ----
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(42, 0, 42, 12),
+
+                            child: SizedBox(
+                              width: double.infinity,
+                              height: 52,
+
+                              child: OutlinedButton(
+                                onPressed: _hasMoreProducts
+                                    ? _loadMoreProducts
+                                    : null,
+
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFF087524),
+                                  side: BorderSide(
+                                    color: _hasMoreProducts
+                                        ? const Color(0xFF087524)
+                                        : const Color(0xFFD5E2D3),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      _hasMoreProducts
+                                          ? 'Explore More Products'
+                                          : 'All Products Loaded',
+                                      style: GoogleFonts.plusJakartaSans(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w500,
+                                        color: _hasMoreProducts
+                                            ? const Color(0xFF087524)
+                                            : const Color(0xFF999999),
+                                      ),
+                                    ),
+
+                                    const SizedBox(width: 8),
+
+                                    Icon(
+                                      _hasMoreProducts
+                                          ? Icons.keyboard_arrow_down
+                                          : Icons.check_circle_outline,
+                                      size: 20,
+                                      color: _hasMoreProducts
+                                          ? const Color(0xFF087524)
+                                          : const Color(0xFF999999),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        // ---- Results Count ----
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 16),
+
+                            child: Center(
+                              child: Text(
+                                'Showing ${visibleProducts.length} of ${products.length} results',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  color: const Color(0xFF666666),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Results count
-                  Text(
-                    'Showing ${visibleProducts.length} of ${products.length} results',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 12,
-                      color: const Color(0xFF666666),
-                    ),
-                  ),
-
-                  const SizedBox(height: 16),
-                ],
-              ),
             ),
           ],
         ),

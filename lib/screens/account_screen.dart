@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'edit_profile_screen.dart';
+import 'policy_screen.dart';
+import 'help_support_screen.dart';
 
 // ============================================================================
 // ACCOUNT SCREEN (MY ACCOUNT)
@@ -668,11 +670,17 @@ class _AccountScreenState extends State<AccountScreen> {
                 },
               ),
 
+              // Help & Support → real screen
               _buildMenuItem(
                 icon: Icons.help_outline,
                 title: 'Help & Support',
                 onTap: () {
-                  _showMessage('Help & Support — coming soon');
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const HelpSupportScreen(),
+                    ),
+                  );
                 },
               ),
 
@@ -681,6 +689,17 @@ class _AccountScreenState extends State<AccountScreen> {
                 title: 'Settings',
                 onTap: () {
                   _showMessage('Settings — coming soon');
+                },
+              ),
+              // Privacy Policy & Terms
+              _buildMenuItem(
+                icon: Icons.privacy_tip_outlined,
+                title: 'Privacy Policy & Terms',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PolicyScreen()),
+                  );
                 },
               ),
 
@@ -741,6 +760,23 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
 
               const SizedBox(height: 6),
+
+              // Privacy/Terms → Policy Screen
+              InkWell(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const PolicyScreen()),
+                  );
+                },
+                child: Text(
+                  'Privacy Policy  •  Terms & Conditions',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    color: const Color(0xFF087524),
+                  ),
+                ),
+              ),
 
               Center(
                 child: Text(
