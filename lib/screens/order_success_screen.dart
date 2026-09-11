@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -155,6 +156,57 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
   }
 
   // ==========================================================================
+  // 4b. SMART ITEM IMAGE (network + asset dono support)
+  //
+  // API products ki image internet URL hoti hai (http...),
+  // purane hardcoded products ki local asset (assets/...).
+  // Yeh widget dono handle karta hai + empty case bhi.
+  // ==========================================================================
+
+  Widget _buildItemImage(String image) {
+    // ---- Internet image (API product) ----
+    if (image.startsWith('http')) {
+      return CachedNetworkImage(
+        imageUrl: image,
+        width: 56,
+        height: 56,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => _imagePlaceholder(),
+        errorWidget: (_, _, _) => _imagePlaceholder(),
+      );
+    }
+
+    // ---- Local asset image (purana hardcoded product) ----
+    if (image.isNotEmpty) {
+      return Image.asset(
+        image,
+        width: 56,
+        height: 56,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _imagePlaceholder(),
+      );
+    }
+
+    // ---- Koi image nahi ----
+    return _imagePlaceholder();
+  }
+
+  /// Jab image load na ho / exist na kare.
+  Widget _imagePlaceholder() {
+    return Container(
+      width: 56,
+      height: 56,
+      color: const Color(0xFFF0EEEE),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.image_outlined,
+        size: 22,
+        color: Color(0xFFBBBBBB),
+      ),
+    );
+  }
+
+  // ==========================================================================
   // 5. ITEM ROW (Items card ke andar ek product)
   //
   // [Image] → [Name + Qty × Price] → [Line Total]
@@ -165,15 +217,10 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          // ---- Product Image ----
+          // ---- Product Image (network + asset dono support) ----
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: Image.asset(
-              item.image,
-              width: 56,
-              height: 56,
-              fit: BoxFit.cover,
-            ),
+            child: _buildItemImage(item.image),
           ),
 
           const SizedBox(width: 12),
