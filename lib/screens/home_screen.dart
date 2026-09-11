@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../models/product.dart';
+import '../repositories/product_repository.dart';
 import '../services/cart_provider.dart';
 import 'account_screen.dart';
 import 'categories_screen.dart';
@@ -41,68 +44,17 @@ class _HomeScreenState extends State<HomeScreen> {
   int get _pageCount => _banners.length + 1;
 
   // ==========================================================================
-  // 2. WHAT'S NEW PRODUCTS (zamindar.co ke REAL products)
-  //
-  // Images abhi placeholder hain — API aane par
-  // real images aa jayengi
+  // 2. WHAT'S NEW PRODUCTS — zamindar.co API se LIVE data
   // ==========================================================================
 
-  final List<Map<String, dynamic>> _whatsNewProducts = [
-    {
-      'id': 'subah-800ml',
-      'name': 'Subah – 800 Mls',
-      'price': 780,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
-    {
-      'id': 'mithu-800ml',
-      'name': 'Mithu – 800 Mls',
-      'price': 1499,
-      'image': 'assets/images/whats_new2img (2).png',
-    },
-    {
-      'id': 'mithu-500ml',
-      'name': 'Mithu – 500 Mls',
-      'price': 1099,
-      'image': 'assets/images/whats_new3img.png',
-    },
-    {
-      'id': 'mithu-400ml',
-      'name': 'Mithu – 400 Mls',
-      'price': 899,
-      'image': 'assets/images/whats_new4img.png',
-    },
-    {
-      'id': 'mithu-1ltr',
-      'name': 'Mithu – 1 Ltr',
-      'price': 1799,
-      'image': 'assets/images/whats_new5img.png',
-    },
-    {
-      'id': 'orange-amine-500ml',
-      'name': 'Orange Amine – 500 Mls',
-      'price': 880,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
-    {
-      'id': 'orange-amine-1ltr',
-      'name': 'Orange Amine – 1 Ltr',
-      'price': 1450,
-      'image': 'assets/images/whats_new3img.png',
-    },
-    {
-      'id': 'zehrelli-400ml',
-      'name': 'Zehrelli – 400 Mls',
-      'price': 640,
-      'image': 'assets/images/whats_new4img.png',
-    },
-  ];
+  final ProductRepository _productRepository = ProductRepository();
+
+  List<Product> _whatsNewProducts = [];
+  bool _isLoadingProducts = true;
+  String? _productsError;
 
   // ==========================================================================
-  // 3. AUTO BANNER TIMER — har 3 sec forward slide
-  //
-  // Copy page par: invisible jump + FORAN aage animate
-  // (ek hi tick mein — har banner equal time rehta hai)
+  // 3. INIT — banner timer start + products load
   // ==========================================================================
 
   @override
@@ -129,6 +81,35 @@ class _HomeScreenState extends State<HomeScreen> {
         curve: Curves.easeInOut,
       );
     });
+
+    // API se latest products load karo
+    _loadProducts();
+  }
+
+  /// zamindar.co se latest products fetch karta hai.
+  Future<void> _loadProducts() async {
+    setState(() {
+      _isLoadingProducts = true;
+      _productsError = null;
+    });
+
+    try {
+      final products = await _productRepository.getLatestProducts(perPage: 10);
+
+      if (!mounted) return;
+
+      setState(() {
+        _whatsNewProducts = products;
+        _isLoadingProducts = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _productsError = e.toString();
+        _isLoadingProducts = false;
+      });
+    }
   }
 
   // ==========================================================================
@@ -144,18 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 5. PRICE FORMATTER — 1250 → "1,250"
-  // ==========================================================================
-
-  String _formatPrice(int amount) {
-    return amount.toString().replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-      (match) => '${match[1]},',
-    );
-  }
-
-  // ==========================================================================
-  // 6. SNACKBAR MESSAGE
+  // 5. SNACKBAR MESSAGE
   // ==========================================================================
 
   void _showMessage(String message) {
@@ -174,27 +144,24 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 7. ADD TO CART — shared CartProvider
+  // 6. ADD TO CART — API product se
   // ==========================================================================
 
-  void _addToCart({
-    required String id,
-    required String name,
-    required int price,
-    required String imagePath,
-  }) {
+  void _addToCart(Product product) {
+    final String image = product.imageThumbnailUrl ?? product.imageUrl ?? '';
+
     context.read<CartProvider>().addProduct(
-      id: id,
-      name: name,
-      price: price,
-      image: imagePath,
+      id: product.id.toString(),
+      name: product.name,
+      price: product.price.round(),
+      image: image,
     );
 
-    _showMessage('$name added to cart');
+    _showMessage('${product.name} added to cart');
   }
 
   // ==========================================================================
-  // 8. CATEGORY CLICK
+  // 7. CATEGORY CLICK
   // ==========================================================================
 
   void _showCategoryMessage(String category) {
@@ -202,7 +169,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 9. CATEGORY WIDGET — fixed width (horizontal scroll ke liye)
+  // 8. CATEGORY WIDGET — fixed width (horizontal scroll ke liye)
   // ==========================================================================
 
   Widget _buildCategory({
@@ -253,29 +220,41 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 10. PRODUCT CARD — image + name + price + Add button
-  //
-  // ⚠️ Yahan sirf PRODUCT IMAGE hoti hai (Image.asset) —
-  // banner ka PageView yahan kabhi nahi aata!
+  // 9. IMAGE PLACEHOLDER — jab image na ho / load na ho
   // ==========================================================================
 
-  Widget _buildProductCard({
-    required String id,
-    required String imagePath,
-    required String name,
-    required int price,
-  }) {
+  Widget _imagePlaceholder() {
+    return Container(
+      color: const Color(0xFFF0EEEE),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.image_outlined,
+        size: 36,
+        color: Color(0xFFBBBBBB),
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // 10. PRODUCT CARD — API product + network image
+  // ==========================================================================
+
+  Widget _buildProductCard(Product product) {
     // Cart watch — quantity live update ke liye
     final CartProvider cart = context.watch<CartProvider>();
+
+    final String cartId = product.id.toString();
 
     int quantityInCart = 0;
 
     for (final item in cart.items) {
-      if (item.id == id) {
+      if (item.id == cartId) {
         quantityInCart = item.quantity;
         break;
       }
     }
+
+    final String? imageUrl = product.imageThumbnailUrl ?? product.imageUrl;
 
     return Container(
       width: 160,
@@ -289,14 +268,20 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- Product Image (FIXED: Image.asset, PageView NAHI) ---
+          // --- Product Image (API se — network image) ---
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.asset(
-              imagePath,
+            child: SizedBox(
               width: double.infinity,
               height: 135,
-              fit: BoxFit.cover,
+              child: imageUrl != null && imageUrl.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (_, _) => _imagePlaceholder(),
+                      errorWidget: (_, _, _) => _imagePlaceholder(),
+                    )
+                  : _imagePlaceholder(),
             ),
           ),
 
@@ -304,7 +289,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // --- Product Name ---
           Text(
-            name,
+            product.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: GoogleFonts.plusJakartaSans(
@@ -315,14 +300,34 @@ class _HomeScreenState extends State<HomeScreen> {
 
           const SizedBox(height: 4),
 
-          // --- Product Price ---
-          Text(
-            'Rs ${_formatPrice(price)}',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: const Color(0xFF087524),
+          // --- Product Price (sale par purani price bhi dikhti hai) ---
+          Text.rich(
+            TextSpan(
+              children: [
+                if (product.onSale) ...[
+                  TextSpan(
+                    text: product.displayRegularPrice,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      color: const Color(0xFF999999),
+                      decoration: TextDecoration.lineThrough,
+                      decorationColor: const Color(0xFF999999),
+                    ),
+                  ),
+                  const TextSpan(text: '  '),
+                ],
+                TextSpan(
+                  text: product.displayPrice,
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF087524),
+                  ),
+                ),
+              ],
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
 
           const SizedBox(height: 10),
@@ -333,14 +338,7 @@ class _HomeScreenState extends State<HomeScreen> {
             height: 38,
 
             child: ElevatedButton(
-              onPressed: () {
-                _addToCart(
-                  id: id,
-                  name: name,
-                  price: price,
-                  imagePath: imagePath,
-                );
-              },
+              onPressed: () => _addToCart(product),
 
               style: ElevatedButton.styleFrom(
                 elevation: 0,
@@ -501,7 +499,63 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 13. MAIN UI — build method
+  // 13. PRODUCTS ERROR — message + Retry button
+  // ==========================================================================
+
+  Widget _buildProductsError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.wifi_off_outlined,
+              size: 36,
+              color: Color(0xFF999999),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              _productsError ?? 'Could not load products.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: const Color(0xFF555555),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            ElevatedButton.icon(
+              onPressed: _loadProducts,
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(
+                'Retry',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF087524),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // 14. MAIN UI — build method
   // ==========================================================================
 
   @override
@@ -520,7 +574,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
 
               // =================================================================
-              // 14. HEADER — logo + title + search + profile
+              // 15. HEADER — logo + title + search + profile
               // =================================================================
               Row(
                 children: [
@@ -600,7 +654,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 16),
 
               // =================================================================
-              // 15. HERO BANNER SLIDER — infinite forward loop
+              // 16. HERO BANNER SLIDER — infinite forward loop
               // =================================================================
               SizedBox(
                 width: double.infinity,
@@ -615,13 +669,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: PageView.builder(
                         controller: _pageController,
 
-                        // Padosi pages pre-built — smooth
                         allowImplicitScrolling: true,
 
-                        // 4 pages: 3 asli + 1 copy
                         itemCount: _pageCount,
 
-                        // Sirf dots update — jump ka kaam TIMER karta hai
                         onPageChanged: (index) {
                           setState(() {
                             _currentBanner = index % _banners.length;
@@ -629,7 +680,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         },
 
                         itemBuilder: (context, index) {
-                          // index 3 par _banners[0] (copy) dikhegi
                           return Image.asset(
                             _banners[index % _banners.length],
                             width: double.infinity,
@@ -675,7 +725,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 28),
 
               // =================================================================
-              // 16. CHOOSE BY CATEGORY — 4 categories
+              // 17. CHOOSE BY CATEGORY — 5 categories
               // =================================================================
               Text(
                 'Choose by Category',
@@ -725,7 +775,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       },
                     ),
 
-                    // 5th category — NAYA (site ke mutabiq)
                     _buildCategory(
                       icon: Icons.grass,
                       title: 'Seed Care',
@@ -739,7 +788,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 30),
 
               // =================================================================
-              // 17. WHAT'S NEW HEADER — title + See All
+              // 18. WHAT'S NEW HEADER — title + See All
               // =================================================================
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -752,7 +801,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
 
-                  // See All → Categories screen (saare products)
                   InkWell(
                     onTap: () {
                       Navigator.push(
@@ -777,40 +825,49 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 16),
 
               // =================================================================
-              // 18. WHAT'S NEW PRODUCTS — horizontal list
+              // 19. WHAT'S NEW PRODUCTS — LIVE API + loading + error states
               // =================================================================
               SizedBox(
                 height: 270,
 
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
+                child: _isLoadingProducts
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF087524),
+                        ),
+                      )
+                    : _productsError != null
+                    ? _buildProductsError()
+                    : _whatsNewProducts.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No products found.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 14,
+                            color: const Color(0xFF555555),
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        physics: const BouncingScrollPhysics(),
 
-                  itemCount: _whatsNewProducts.length,
+                        itemCount: _whatsNewProducts.length,
 
-                  // Cards ke beech 12px gap
-                  separatorBuilder: (context, index) {
-                    return const SizedBox(width: 12);
-                  },
+                        separatorBuilder: (context, index) {
+                          return const SizedBox(width: 12);
+                        },
 
-                  itemBuilder: (context, index) {
-                    final Map<String, dynamic> product =
-                        _whatsNewProducts[index];
-
-                    return _buildProductCard(
-                      id: product['id'] as String,
-                      imagePath: product['image'] as String,
-                      name: product['name'] as String,
-                      price: product['price'] as int,
-                    );
-                  },
-                ),
+                        itemBuilder: (context, index) {
+                          return _buildProductCard(_whatsNewProducts[index]);
+                        },
+                      ),
               ),
 
               const SizedBox(height: 30),
 
               // =================================================================
-              // 19. OUR BRANDS — horizontal chips
+              // 20. OUR BRANDS — horizontal chips
               // =================================================================
               Text(
                 'Our Brands',
@@ -852,7 +909,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 30),
 
               // =================================================================
-              // 20. CUSTOMER REVIEW
+              // 21. CUSTOMER REVIEW
               // =================================================================
               _buildReviewCard(),
 

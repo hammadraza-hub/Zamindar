@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -74,6 +75,7 @@ class _CartScreenState extends State<CartScreen> {
       MaterialPageRoute(builder: (_) => CheckoutScreen()),
     );
   }
+
   // ==========================================================================
   // 3. QUANTITY BUTTON (gol chhota - / + button)
   // ==========================================================================
@@ -99,7 +101,58 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   // ==========================================================================
-  // 4. CART ITEM CARD
+  // 4. SMART CART IMAGE
+  //
+  // API products ki image internet URL hoti hai (http...),
+  // purane hardcoded products ki local asset (assets/...).
+  // Yeh widget dono handle karta hai + empty case bhi.
+  // ==========================================================================
+
+  Widget _buildCartImage(String image) {
+    // ---- Internet image (API product) ----
+    if (image.startsWith('http')) {
+      return CachedNetworkImage(
+        imageUrl: image,
+        width: 80,
+        height: 80,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => _imagePlaceholder(),
+        errorWidget: (_, _, _) => _imagePlaceholder(),
+      );
+    }
+
+    // ---- Local asset image (purana hardcoded product) ----
+    if (image.isNotEmpty) {
+      return Image.asset(
+        image,
+        width: 80,
+        height: 80,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _imagePlaceholder(),
+      );
+    }
+
+    // ---- Koi image nahi ----
+    return _imagePlaceholder();
+  }
+
+  /// Jab image load na ho / exist na kare.
+  Widget _imagePlaceholder() {
+    return Container(
+      width: 80,
+      height: 80,
+      color: const Color(0xFFF0EEEE),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.image_outlined,
+        size: 28,
+        color: Color(0xFFBBBBBB),
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // 5. CART ITEM CARD
   //
   // [Image] → [Name + Price + (qty -/+ ... trash)]
   // ==========================================================================
@@ -121,15 +174,10 @@ class _CartScreenState extends State<CartScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ---- Product Image ----
+          // ---- Product Image (network + asset dono support) ----
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            child: Image.asset(
-              item.image,
-              width: 80,
-              height: 80,
-              fit: BoxFit.cover,
-            ),
+            child: _buildCartImage(item.image),
           ),
 
           const SizedBox(width: 12),
@@ -227,7 +275,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   // ==========================================================================
-  // 5. SUMMARY ROW (Subtotal / Delivery / Total)
+  // 6. SUMMARY ROW (Subtotal / Delivery / Total)
   // ==========================================================================
 
   Widget _buildSummaryRow(String label, String value, {bool isTotal = false}) {
@@ -266,7 +314,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   // ==========================================================================
-  // 6. EMPTY CART STATE
+  // 7. EMPTY CART STATE
   // ==========================================================================
 
   Widget _buildEmptyCart() {
@@ -314,7 +362,7 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   // ==========================================================================
-  // 7. MAIN UI
+  // 8. MAIN UI
   // ==========================================================================
 
   @override
