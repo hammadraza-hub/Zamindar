@@ -14,6 +14,8 @@ Future<void> main() async {
   // Kya onboarding pehle ho chuki hai?
   final prefs = await SharedPreferences.getInstance();
   final bool onboardingDone = prefs.getBool('onboarding_done') ?? false;
+  // TEMPORARY: hamesha onboarding dikhti hai (review ke liye)
+  // final bool onboardingDone = false;
 
   runApp(
     ChangeNotifierProvider(
