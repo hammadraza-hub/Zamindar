@@ -9,6 +9,7 @@ import '../repositories/product_repository.dart';
 import '../services/cart_provider.dart';
 import 'account_screen.dart';
 import 'search_screen.dart';
+import 'product_detail_screen.dart';
 
 // ============================================================================
 // CATEGORIES SCREEN
@@ -19,6 +20,7 @@ import 'search_screen.dart';
 //   - Category tap → us category ke asli products
 //   - Price filter (slider) + Sort
 //   - Pagination — "Explore More" API se next page lata hai
+//   - Card tap → Product Detail screen
 // ============================================================================
 
 class CategoriesScreen extends StatefulWidget {
@@ -336,7 +338,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 10. PRODUCT CARD (API product — network image)
+  // 10. PRODUCT CARD (API product — network image + tap → detail screen)
   // ==========================================================================
 
   Widget _buildProductCard(Product product) {
@@ -360,133 +362,150 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         ? product.categoryNames.first.toUpperCase()
         : '';
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+    return InkWell(
+      // ---- Card tap → DETAIL SCREEN ----
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(product: product),
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // --- Image (API se network image) ---
-          ClipRRect(
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: SizedBox(
-              width: double.infinity,
-              height: 150,
-              child: imageUrl != null && imageUrl.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) => _imagePlaceholder(),
-                      errorWidget: (_, _, _) => _imagePlaceholder(),
-                    )
-                  : _imagePlaceholder(),
-            ),
-          ),
+        );
+      },
 
-          // --- Details ---
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Category (brand ki jagah)
-                if (topLine.isNotEmpty)
+      borderRadius: BorderRadius.circular(12),
+
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- Image (API se network image) ---
+            ClipRRect(
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                height: 150,
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => _imagePlaceholder(),
+                        errorWidget: (_, _, _) => _imagePlaceholder(),
+                      )
+                    : _imagePlaceholder(),
+              ),
+            ),
+
+            // --- Details ---
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Category (brand ki jagah)
+                  if (topLine.isNotEmpty)
+                    Text(
+                      topLine,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        color: const Color(0xFF555555),
+                      ),
+                    ),
+
+                  const SizedBox(height: 3),
+
+                  // Name
                   Text(
-                    topLine,
+                    product.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      color: const Color(0xFF555555),
+                      fontSize: 15,
+                      fontWeight: FontWeight.w400,
+                      color: const Color(0xFF303030),
                     ),
                   ),
 
-                const SizedBox(height: 3),
+                  const SizedBox(height: 10),
 
-                // Name
-                Text(
-                  product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w400,
-                    color: const Color(0xFF303030),
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                Row(
-                  children: [
-                    // --- Price ---
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            product.displayPrice,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w600,
-                              color: const Color(0xFF087524),
-                            ),
-                          ),
-
-                          if (product.onSale)
+                  Row(
+                    children: [
+                      // --- Price ---
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
                             Text(
-                              product.displayRegularPrice,
+                              product.displayPrice,
                               style: GoogleFonts.plusJakartaSans(
-                                fontSize: 10,
-                                color: const Color(0xFF777777),
-                                decoration: TextDecoration.lineThrough,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF087524),
                               ),
                             ),
-                        ],
-                      ),
-                    ),
 
-                    // --- (+) Button ---
-                    InkWell(
-                      onTap: () => _addToCart(product),
-                      borderRadius: BorderRadius.circular(50),
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        alignment: Alignment.center,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFFF7900),
-                          shape: BoxShape.circle,
-                        ),
-                        child: quantityInCart > 0
-                            ? Text(
-                                '$quantityInCart',
+                            if (product.onSale)
+                              Text(
+                                product.displayRegularPrice,
                                 style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF202020),
+                                  fontSize: 10,
+                                  color: const Color(0xFF777777),
+                                  decoration: TextDecoration.lineThrough,
                                 ),
-                              )
-                            : const Icon(
-                                Icons.add,
-                                size: 22,
-                                color: Color(0xFF202020),
                               ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              ],
+
+                      // --- (+) Button ---
+                      InkWell(
+                        onTap: () => _addToCart(product),
+                        borderRadius: BorderRadius.circular(50),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          alignment: Alignment.center,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFF7900),
+                            shape: BoxShape.circle,
+                          ),
+                          child: quantityInCart > 0
+                              ? Text(
+                                  '$quantityInCart',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: const Color(0xFF202020),
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.add,
+                                  size: 22,
+                                  color: Color(0xFF202020),
+                                ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -550,9 +569,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   // ==========================================================================
   // 12. FILTER SHEET (price range)
   //
-  // NOTE: Company/brand filter abhi hata diya — API products mein
-  // brand ka data nahi aata. Agar baad mein website par brand
-  // attribute mil jaye to wapas add kar sakte hain.
+  // NOTE: Company/brand filter hata diya — API products mein brand ka
+  // data nahi aata. Baad mein website par brand attribute mil jaye
+  // to wapas add kar sakte hain.
   // ==========================================================================
 
   void _showFilterSheet() {

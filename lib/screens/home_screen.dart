@@ -11,6 +11,7 @@ import '../services/cart_provider.dart';
 import 'account_screen.dart';
 import 'categories_screen.dart';
 import 'search_screen.dart';
+import 'product_detail_screen.dart';
 
 // ============================================================================
 // HOME SCREEN
@@ -237,6 +238,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // ==========================================================================
   // 10. PRODUCT CARD — API product + network image
+  // (card par tap → Product Detail screen khulti hai)
   // ==========================================================================
 
   Widget _buildProductCard(Product product) {
@@ -256,113 +258,126 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final String? imageUrl = product.imageThumbnailUrl ?? product.imageUrl;
 
-    return Container(
-      width: 160,
-      padding: const EdgeInsets.all(12),
-
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // --- Product Image (API se — network image) ---
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: SizedBox(
-              width: double.infinity,
-              height: 135,
-              child: imageUrl != null && imageUrl.isNotEmpty
-                  ? CachedNetworkImage(
-                      imageUrl: imageUrl,
-                      fit: BoxFit.cover,
-                      placeholder: (_, _) => _imagePlaceholder(),
-                      errorWidget: (_, _, _) => _imagePlaceholder(),
-                    )
-                  : _imagePlaceholder(),
-            ),
+    return InkWell(
+      // ---- Card tap → DETAIL SCREEN ----
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(product: product),
           ),
+        );
+      },
 
-          const SizedBox(height: 10),
+      borderRadius: BorderRadius.circular(12),
 
-          // --- Product Name ---
-          Text(
-            product.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 14,
-              color: const Color(0xFF303030),
+      child: Container(
+        width: 160,
+        padding: const EdgeInsets.all(12),
+
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // --- Product Image (API se — network image) ---
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                width: double.infinity,
+                height: 135,
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => _imagePlaceholder(),
+                        errorWidget: (_, _, _) => _imagePlaceholder(),
+                      )
+                    : _imagePlaceholder(),
+              ),
             ),
-          ),
 
-          const SizedBox(height: 4),
+            const SizedBox(height: 10),
 
-          // --- Product Price (sale par purani price bhi dikhti hai) ---
-          Text.rich(
-            TextSpan(
-              children: [
-                if (product.onSale) ...[
+            // --- Product Name ---
+            Text(
+              product.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 14,
+                color: const Color(0xFF303030),
+              ),
+            ),
+
+            const SizedBox(height: 4),
+
+            // --- Product Price (sale par purani price bhi dikhti hai) ---
+            Text.rich(
+              TextSpan(
+                children: [
+                  if (product.onSale) ...[
+                    TextSpan(
+                      text: product.displayRegularPrice,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        color: const Color(0xFF999999),
+                        decoration: TextDecoration.lineThrough,
+                        decorationColor: const Color(0xFF999999),
+                      ),
+                    ),
+                    const TextSpan(text: '  '),
+                  ],
                   TextSpan(
-                    text: product.displayRegularPrice,
+                    text: product.displayPrice,
                     style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11,
-                      color: const Color(0xFF999999),
-                      decoration: TextDecoration.lineThrough,
-                      decorationColor: const Color(0xFF999999),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF087524),
                     ),
                   ),
-                  const TextSpan(text: '  '),
                 ],
-                TextSpan(
-                  text: product.displayPrice,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF087524),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            const SizedBox(height: 10),
+
+            // --- Add To Cart Button (+ quantity) ---
+            SizedBox(
+              width: double.infinity,
+              height: 38,
+
+              child: ElevatedButton(
+                onPressed: () => _addToCart(product),
+
+                style: ElevatedButton.styleFrom(
+                  elevation: 0,
+                  backgroundColor: const Color(0xFFFF7900),
+                  foregroundColor: const Color(0xFF222222),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(7),
                   ),
                 ),
-              ],
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
 
-          const SizedBox(height: 10),
-
-          // --- Add To Cart Button (+ quantity) ---
-          SizedBox(
-            width: double.infinity,
-            height: 38,
-
-            child: ElevatedButton(
-              onPressed: () => _addToCart(product),
-
-              style: ElevatedButton.styleFrom(
-                elevation: 0,
-                backgroundColor: const Color(0xFFFF7900),
-                foregroundColor: const Color(0xFF222222),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(7),
-                ),
-              ),
-
-              child: Text(
-                quantityInCart > 0 ? '+ Add ($quantityInCart)' : '+ Add',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
+                child: Text(
+                  quantityInCart > 0 ? '+ Add ($quantityInCart)' : '+ Add',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
-
   // ==========================================================================
   // 11. BRAND CHIP
   // ==========================================================================
