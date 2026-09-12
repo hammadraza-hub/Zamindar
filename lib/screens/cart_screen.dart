@@ -385,14 +385,33 @@ class _CartScreenState extends State<CartScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
               child: Row(
                 children: [
-                  Image.asset(
-                    'assets/images/zamindar_logo.png',
-                    width: 70,
-                    height: 45,
-                    fit: BoxFit.contain,
-                  ),
+                  // Detail se aaye hain → BACK ARROW
+                  // Bottom tab se aaye hain → LOGO (warna pop par app se bahar!)
+                  if (ModalRoute.of(context)?.canPop ?? false) ...[
+                    InkWell(
+                      onTap: () => Navigator.pop(context),
+                      borderRadius: BorderRadius.circular(30),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.arrow_back,
+                          size: 25,
+                          color: Color(0xFF087524),
+                        ),
+                      ),
+                    ),
 
-                  const SizedBox(width: 8),
+                    const SizedBox(width: 12),
+                  ] else ...[
+                    Image.asset(
+                      'assets/images/zamindar_logo.png',
+                      width: 70,
+                      height: 45,
+                      fit: BoxFit.contain,
+                    ),
+
+                    const SizedBox(width: 8),
+                  ],
 
                   Text(
                     'Cart',

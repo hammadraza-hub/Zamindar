@@ -14,14 +14,17 @@ Future<void> main() async {
   // Kya onboarding pehle ho chuki hai?
   final prefs = await SharedPreferences.getInstance();
   final bool onboardingDone = prefs.getBool('onboarding_done') ?? false;
+
+  // Cart provider banao + purani saved cart load karo
+  final cartProvider = CartProvider();
+  await cartProvider.ensureLoaded();
   // TEMPORARY: hamesha onboarding dikhti hai (review ke liye)
   // final bool onboardingDone = false;
 
   runApp(
     ChangeNotifierProvider(
-      // Shared cart
-      create: (_) => CartProvider(),
-
+      // Shared cart (pehle se loaded — purani cart ke saath)
+      create: (_) => cartProvider,
       // showOnboarding YAHAN pass ho raha hai! ⬇️
       child: MyApp(showOnboarding: !onboardingDone),
     ),
