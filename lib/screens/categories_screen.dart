@@ -1,7 +1,11 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../models/category.dart';
+import '../models/product.dart';
+import '../repositories/product_repository.dart';
 import '../services/cart_provider.dart';
 import 'account_screen.dart';
 import 'search_screen.dart';
@@ -9,8 +13,12 @@ import 'search_screen.dart';
 // ============================================================================
 // CATEGORIES SCREEN
 //
-// Category chips + Company filters + Price slider + Sort
-// + Explore More (scroll ke saath — CustomScrollView)
+// Categories + products ab zamindar.co API se LIVE aate hain!
+//
+//   - Category chips API se (Fertilizer, Herbicide, Fungicide, ...)
+//   - Category tap → us category ke asli products
+//   - Price filter (slider) + Sort
+//   - Pagination — "Explore More" API se next page lata hai
 // ============================================================================
 
 class CategoriesScreen extends StatefulWidget {
@@ -22,222 +30,36 @@ class CategoriesScreen extends StatefulWidget {
 
 class _CategoriesScreenState extends State<CategoriesScreen> {
   // ==========================================================================
-  // 1. PRODUCTS DATA
+  // 1. STATE — API data + filters
   // ==========================================================================
 
-  final List<Map<String, dynamic>> products = [
-    // ---- INSECTICIDES ----
-    {
-      'id': 'confidor-200-sl',
-      'name': 'Confidor 200 SL',
-      'brand': 'Bayer',
-      'category': 'Insecticides',
-      'price': 1850,
-      'oldPrice': 2100,
-      'image': 'assets/images/whats_new3img.png',
-    },
-    {
-      'id': 'belt-480-sc',
-      'name': 'Belt 480 SC',
-      'brand': 'Bayer',
-      'category': 'Insecticides',
-      'price': 1240,
-      'image': 'assets/images/whats_new4img.png',
-    },
-    {
-      'id': 'movento-240-sc',
-      'name': 'Movento 240 SC',
-      'brand': 'Bayer',
-      'category': 'Insecticides',
-      'price': 980,
-      'image': 'assets/images/whats_new5img.png',
-    },
-    {
-      'id': 'decis-100-ec',
-      'name': 'Decis 100 EC',
-      'brand': 'Bayer',
-      'category': 'Insecticides',
-      'price': 650,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
-    {
-      'id': 'actara-25-wg',
-      'name': 'ACTARA 25 WG (24 GM)',
-      'brand': 'Syngenta',
-      'category': 'Insecticides',
-      'price': 500,
-      'image': 'assets/images/whats_new5img.png',
-    },
-    {
-      'id': 'ampligo-150-zc',
-      'name': 'AMPLIGO 150 ZC (160 Ml)',
-      'brand': 'Syngenta',
-      'category': 'Insecticides',
-      'price': 2800,
-      'image': 'assets/images/whats_new2img (2).png',
-    },
+  final ProductRepository _repository = ProductRepository();
 
-    // ---- HERBICIDES ----
-    {
-      'id': 'orange-amine-500ml',
-      'name': 'Orange Amine – 500 Mls',
-      'brand': 'Orange Production',
-      'category': 'Herbicides',
-      'price': 880,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
-    {
-      'id': 'adengo-xtra-132ml',
-      'name': 'Adengo Xtra 132ml',
-      'brand': 'Bayer',
-      'category': 'Herbicides',
-      'price': 2700,
-      'image': 'assets/images/whats_new4img.png',
-    },
+  /// Ek page par kitne products maangte hain (pagination).
+  static const int _perPage = 20;
 
-    // ---- FUNGICIDES ----
-    {
-      'id': 'aliette-250g',
-      'name': 'Aliette 80% WP 250g',
-      'brand': 'Bayer',
-      'category': 'Fungicides',
-      'price': 1250,
-      'image': 'assets/images/whats_new3img.png',
-    },
-    {
-      'id': 'amistar-top-200ml',
-      'name': 'Amistar Top 325 SC',
-      'brand': 'Syngenta',
-      'category': 'Fungicides',
-      'price': 1550,
-      'image': 'assets/images/whats_new5img.png',
-    },
+  // ---- Categories (API) ----
+  List<Category> _categories = [];
+  bool _isLoadingCategories = true;
+  String? _categoriesError;
 
-    // ---- PGRs ----
-    {
-      'id': 'ambition-500ml',
-      'name': 'Ambition 500ml',
-      'brand': 'Bayer',
-      'category': 'PGRs',
-      'price': 1900,
-      'image': 'assets/images/whats_new2img (2).png',
-    },
-    {
-      'id': 'subah-800ml',
-      'name': 'Subah – 800 Mls',
-      'brand': 'Sohni Dharti',
-      'category': 'PGRs',
-      'price': 780,
-      'image': 'assets/images/whats_new4img.png',
-    },
+  /// Selected category — null matlab "All".
+  Category? _selectedCategory;
 
-    // ---- SEED CARE ----
-    {
-      'id': 'hybrid-corn-seeds',
-      'name': 'Hybrid Corn Seeds (1kg)',
-      'brand': 'Sakata Seeds',
-      'category': 'Seed Care',
-      'price': 3500,
-      'image': 'assets/images/whats_new5img.png',
-    },
-    {
-      'id': 'wheat-seeds',
-      'name': 'Wheat Seeds (Certified)',
-      'brand': 'Sohni Dharti',
-      'category': 'Seed Care',
-      'price': 1200,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
-  ];
+  // ---- Products (API) ----
+  List<Product> _products = [];
+  bool _isLoadingProducts = true;
+  bool _isLoadingMore = false;
+  String? _productsError;
+  int _currentPage = 0;
+  bool _hasMore = true;
 
-  // ==========================================================================
-  // 1b. MORE PRODUCTS (Explore More)
-  // ==========================================================================
-
-  final List<Map<String, dynamic>> _nextBatch = [
-    {
-      'id': 'mithu-800ml',
-      'name': 'Mithu – 800 Mls',
-      'brand': 'Orange Production',
-      'category': 'Insecticides',
-      'price': 1499,
-      'image': 'assets/images/whats_new4img.png',
-    },
-    {
-      'id': 'zehrelli-400ml',
-      'name': 'Zehrelli – 400 Mls',
-      'brand': 'Sohni Dharti',
-      'category': 'Insecticides',
-      'price': 640,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
-    {
-      'id': 'acetamiprid-20-sl',
-      'name': 'Acetamiprid 20% SL 250ml',
-      'brand': 'Evyol Group',
-      'category': 'Insecticides',
-      'price': 1540,
-      'image': 'assets/images/whats_new5img.png',
-    },
-    {
-      'id': 'orange-amine-1ltr',
-      'name': 'Orange Amine – 1 Ltr',
-      'brand': 'Orange Production',
-      'category': 'Herbicides',
-      'price': 1450,
-      'image': 'assets/images/whats_new3img.png',
-    },
-    {
-      'id': 'antracol-70wp',
-      'name': 'Antracol 70 WP 1kg',
-      'brand': 'Bayer',
-      'category': 'Fungicides',
-      'price': 3800,
-      'image': 'assets/images/whats_new4img.png',
-    },
-    {
-      'id': 'agroquat-20-sl',
-      'name': 'Agroquat 20 SL 1L',
-      'brand': 'Evyol Group',
-      'category': 'Herbicides',
-      'price': 875,
-      'image': 'assets/images/whats_new5img.png',
-    },
-  ];
-
-  bool get _hasMoreProducts => _nextBatch.isNotEmpty;
-
-  // ==========================================================================
-  // 2. FILTER / SORT DATA
-  // ==========================================================================
-
+  // ---- Sort ----
   String selectedSort = 'Popularity';
 
-  final List<String> selectedFilters = [];
-
-  final List<String> companyFilters = [
-    'Bayer',
-    'Syngenta',
-    'Evyol Group',
-    'Orange Production',
-    'Haji Sons',
-    'Kanzo AG',
-    'Sakata Seeds',
-    'Sohni Dharti',
-  ];
-
-  // ==========================================================================
-  // 2b. CATEGORY STATE
-  // ==========================================================================
-
-  String _selectedCategory = 'All';
-
-  // ==========================================================================
-  // 2c. PRICE RANGE STATE
-  // ==========================================================================
-
+  // ---- Price Range ----
   static const double _priceMinLimit = 0;
-  static const double _priceMaxLimit = 5000;
+  static const double _priceMaxLimit = 10000;
 
   RangeValues _priceRange = const RangeValues(_priceMinLimit, _priceMaxLimit);
 
@@ -245,53 +67,155 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       _priceRange.start > _priceMinLimit || _priceRange.end < _priceMaxLimit;
 
   // ==========================================================================
-  // 3. FILTERED + SORTED PRODUCTS
+  // 2. FILTERED + SORTED PRODUCTS (loaded data par client-side)
   // ==========================================================================
 
-  List<Map<String, dynamic>> get filteredProducts {
-    List<Map<String, dynamic>> result = List<Map<String, dynamic>>.from(
-      products,
-    );
-
-    // ---- Category Filter ----
-    if (_selectedCategory != 'All') {
-      result = result.where((p) => p['category'] == _selectedCategory).toList();
-    }
-
-    // ---- Company Filter ----
-    final selectedCompanies = selectedFilters
-        .where((filter) => companyFilters.contains(filter))
-        .toList();
-
-    if (selectedCompanies.isNotEmpty) {
-      result = result
-          .where((p) => selectedCompanies.contains(p['brand']))
-          .toList();
-    }
+  List<Product> get filteredProducts {
+    List<Product> result = List<Product>.from(_products);
 
     // ---- Price Filter (slider) ----
     if (_isPriceFilterActive) {
-      result = result.where((product) {
-        final int price = product['price'] as int;
-
-        return price >= _priceRange.start && price <= _priceRange.end;
-      }).toList();
+      result = result
+          .where(
+            (p) => p.price >= _priceRange.start && p.price <= _priceRange.end,
+          )
+          .toList();
     }
 
     // ---- Sort ----
     if (selectedSort == 'Price Low') {
-      result.sort((a, b) => (a['price'] as int).compareTo(b['price'] as int));
+      result.sort((a, b) => a.price.compareTo(b.price));
+    } else if (selectedSort == 'Price High') {
+      result.sort((a, b) => b.price.compareTo(a.price));
     }
-
-    if (selectedSort == 'Price High') {
-      result.sort((a, b) => (b['price'] as int).compareTo(a['price'] as int));
-    }
+    // 'Popularity' / 'Newest' → API ka default order (newest first)
 
     return result;
   }
 
   // ==========================================================================
-  // 4. SNACKBAR
+  // 3. INIT
+  // ==========================================================================
+
+  @override
+  void initState() {
+    super.initState();
+
+    _loadCategories();
+    _loadProducts(); // "All" ke liye initial load
+  }
+
+  // ==========================================================================
+  // 4. DATA LOADERS (API)
+  // ==========================================================================
+
+  Future<void> _loadCategories() async {
+    setState(() {
+      _isLoadingCategories = true;
+      _categoriesError = null;
+    });
+
+    try {
+      final categories = await _repository.getCategories();
+
+      if (!mounted) return;
+
+      setState(() {
+        _categories = categories;
+        _isLoadingCategories = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _categoriesError = e.toString();
+        _isLoadingCategories = false;
+      });
+    }
+  }
+
+  /// Category chip tap par — "All" ke liye [category] = null.
+  Future<void> _selectCategory(Category? category) async {
+    // Wahi category dobara tap → reload skip
+    if (_selectedCategory?.id == category?.id && _products.isNotEmpty) {
+      return;
+    }
+
+    setState(() {
+      _selectedCategory = category;
+      _products = [];
+      _currentPage = 0;
+      _hasMore = true;
+    });
+
+    await _loadProducts();
+  }
+
+  /// Products fetch — [loadMore] = true ho to next page append hoti hai.
+  Future<void> _loadProducts({bool loadMore = false}) async {
+    if (loadMore && _isLoadingMore) return;
+
+    if (loadMore) {
+      setState(() => _isLoadingMore = true);
+    } else {
+      setState(() {
+        _isLoadingProducts = true;
+        _productsError = null;
+      });
+    }
+
+    try {
+      final int page = loadMore ? _currentPage + 1 : 1;
+
+      final List<Product> fetched;
+
+      if (_selectedCategory == null) {
+        // "All" → latest products
+        fetched = await _repository.getLatestProducts(
+          perPage: _perPage,
+          page: page,
+        );
+      } else {
+        fetched = await _repository.getProductsByCategory(
+          _selectedCategory!.id,
+          perPage: _perPage,
+          page: page,
+        );
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        if (loadMore) {
+          _products.addAll(fetched);
+          _isLoadingMore = false;
+        } else {
+          _products = fetched;
+          _isLoadingProducts = false;
+        }
+
+        _currentPage = page;
+
+        // Page full nahi aya → aur pages nahi hain
+        _hasMore = fetched.length >= _perPage;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      if (loadMore) {
+        setState(() => _isLoadingMore = false);
+        _showMessage('Could not load more products');
+      } else {
+        setState(() {
+          _productsError = e.toString();
+          _isLoadingProducts = false;
+        });
+      }
+    }
+  }
+
+  // ==========================================================================
+  // 5. SNACKBAR
   // ==========================================================================
 
   void _showMessage(String message) {
@@ -310,62 +234,56 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 5. ADD TO CART
+  // 6. ADD TO CART (API product)
   // ==========================================================================
 
-  void _addToCart(Map<String, dynamic> product) {
+  void _addToCart(Product product) {
+    final String image = product.imageThumbnailUrl ?? product.imageUrl ?? '';
+
     context.read<CartProvider>().addProduct(
-      id: product['id'] as String,
-      name: product['name'] as String,
-      price: product['price'] as int,
-      image: product['image'] as String,
+      id: product.id.toString(),
+      name: product.name,
+      price: product.price.round(),
+      image: image,
     );
 
-    _showMessage('${product['name']} added to cart');
+    _showMessage('${product.name} added to cart');
   }
 
   // ==========================================================================
-  // 5b. LOAD MORE
+  // 7. IMAGE PLACEHOLDER
   // ==========================================================================
 
-  void _loadMoreProducts() {
-    if (_nextBatch.isEmpty) {
-      _showMessage('All products loaded');
-      return;
-    }
-
-    setState(() {
-      products.addAll(_nextBatch);
-      _nextBatch.clear();
-    });
-
-    _showMessage('More products loaded');
+  Widget _imagePlaceholder() {
+    return Container(
+      color: const Color(0xFFF0EEEE),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.image_outlined,
+        size: 32,
+        color: Color(0xFFBBBBBB),
+      ),
+    );
   }
 
   // ==========================================================================
-  // 6. CATEGORY CHIP
+  // 8. CATEGORY CHIP
   // ==========================================================================
 
-  Widget _buildCategoryChip(String name) {
-    final bool isSelected = _selectedCategory == name;
-
+  Widget _buildCategoryChip(
+    String name, {
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
-      onTap: () {
-        setState(() {
-          _selectedCategory = name;
-        });
-      },
-
+      onTap: onTap,
       borderRadius: BorderRadius.circular(30),
-
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF087524) : const Color(0xFFF0EEEE),
           borderRadius: BorderRadius.circular(30),
         ),
-
         child: Text(
           name,
           style: GoogleFonts.plusJakartaSans(
@@ -379,45 +297,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 6b. FILTER CHIP
-  // ==========================================================================
-
-  Widget _buildFilterChip({
-    required String text,
-    required VoidCallback onRemove,
-  }) {
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.only(left: 12, right: 7),
-      decoration: BoxDecoration(
-        color: const Color(0xFFDCE8DA),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            text,
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 12,
-              color: const Color(0xFF087524),
-            ),
-          ),
-
-          const SizedBox(width: 4),
-
-          InkWell(
-            onTap: onRemove,
-            borderRadius: BorderRadius.circular(20),
-            child: const Icon(Icons.close, size: 16, color: Color(0xFF087524)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================================================
-  // 6c. PRICE CHIP
+  // 9. PRICE CHIP
   // ==========================================================================
 
   Widget _buildPriceChip() {
@@ -456,71 +336,29 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 7. FILTER OPTION (sheet)
+  // 10. PRODUCT CARD (API product — network image)
   // ==========================================================================
 
-  Widget _filterOption(
-    String text,
-    void Function(VoidCallback fn) setSheetState,
-  ) {
-    final bool isSelected = selectedFilters.contains(text);
-
-    return InkWell(
-      onTap: () {
-        setState(() {
-          if (isSelected) {
-            selectedFilters.remove(text);
-          } else {
-            selectedFilters.add(text);
-          }
-        });
-
-        setSheetState(() {});
-      },
-
-      borderRadius: BorderRadius.circular(20),
-
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFDCE8DA) : const Color(0xFFF0F3EE),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected
-                ? const Color(0xFF087524)
-                : const Color(0xFFD5E2D3),
-          ),
-        ),
-
-        child: Text(
-          text,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 12,
-            color: isSelected
-                ? const Color(0xFF087524)
-                : const Color(0xFF333333),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ==========================================================================
-  // 8. PRODUCT CARD
-  // ==========================================================================
-
-  Widget _buildProductCard(Map<String, dynamic> product) {
+  Widget _buildProductCard(Product product) {
     final CartProvider cart = context.watch<CartProvider>();
+
+    final String cartId = product.id.toString();
 
     int quantityInCart = 0;
 
     for (final item in cart.items) {
-      if (item.id == product['id']) {
+      if (item.id == cartId) {
         quantityInCart = item.quantity;
         break;
       }
     }
+
+    final String? imageUrl = product.imageThumbnailUrl ?? product.imageUrl;
+
+    // Brand ki jagah category ka naam (API mein brand alag se nahi aata)
+    final String topLine = product.categoryNames.isNotEmpty
+        ? product.categoryNames.first.toUpperCase()
+        : '';
 
     return Container(
       decoration: BoxDecoration(
@@ -537,14 +375,20 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // --- Image ---
+          // --- Image (API se network image) ---
           ClipRRect(
             borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-            child: Image.asset(
-              product['image'],
+            child: SizedBox(
               width: double.infinity,
               height: 150,
-              fit: BoxFit.cover,
+              child: imageUrl != null && imageUrl.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: imageUrl,
+                      fit: BoxFit.cover,
+                      placeholder: (_, _) => _imagePlaceholder(),
+                      errorWidget: (_, _, _) => _imagePlaceholder(),
+                    )
+                  : _imagePlaceholder(),
             ),
           ),
 
@@ -554,20 +398,21 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Brand
-                Text(
-                  product['brand'].toString().toUpperCase(),
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    color: const Color(0xFF555555),
+                // Category (brand ki jagah)
+                if (topLine.isNotEmpty)
+                  Text(
+                    topLine,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      color: const Color(0xFF555555),
+                    ),
                   ),
-                ),
 
                 const SizedBox(height: 3),
 
                 // Name
                 Text(
-                  product['name'],
+                  product.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
@@ -587,7 +432,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Rs ${product['price']}',
+                            product.displayPrice,
                             style: GoogleFonts.plusJakartaSans(
                               fontSize: 17,
                               fontWeight: FontWeight.w600,
@@ -595,9 +440,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                             ),
                           ),
 
-                          if (product['oldPrice'] != null)
+                          if (product.onSale)
                             Text(
-                              'Rs ${product['oldPrice']}',
+                              product.displayRegularPrice,
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 10,
                                 color: const Color(0xFF777777),
@@ -647,7 +492,67 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 9. FILTER SHEET
+  // 11. PRODUCTS ERROR — message + Retry
+  // ==========================================================================
+
+  Widget _buildProductsError() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.wifi_off_outlined,
+              size: 36,
+              color: Color(0xFF999999),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              _productsError ?? 'Could not load products.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: const Color(0xFF555555),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            ElevatedButton.icon(
+              onPressed: () => _loadProducts(),
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(
+                'Retry',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF087524),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // 12. FILTER SHEET (price range)
+  //
+  // NOTE: Company/brand filter abhi hata diya — API products mein
+  // brand ka data nahi aata. Agar baad mein website par brand
+  // attribute mil jaye to wapas add kar sakte hain.
   // ==========================================================================
 
   void _showFilterSheet() {
@@ -683,51 +588,15 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     const SizedBox(height: 20),
 
                     // --- Title ---
-                    Row(
-                      children: [
-                        Text(
-                          'Filters',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-
-                        const Spacer(),
-
-                        if (selectedFilters.isNotEmpty)
-                          Text(
-                            '${selectedFilters.length} selected',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              color: const Color(0xFF087524),
-                            ),
-                          ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // --- Company ---
                     Text(
-                      'Company',
+                      'Filters',
                       style: GoogleFonts.plusJakartaSans(
-                        fontSize: 14,
+                        fontSize: 20,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
 
-                    const SizedBox(height: 12),
-
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: companyFilters
-                          .map((f) => _filterOption(f, setSheetState))
-                          .toList(),
-                    ),
-
-                    const SizedBox(height: 26),
+                    const SizedBox(height: 24),
 
                     // --- Price Slider ---
                     Row(
@@ -783,7 +652,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                           child: OutlinedButton(
                             onPressed: () {
                               setState(() {
-                                selectedFilters.clear();
                                 _priceRange = const RangeValues(
                                   _priceMinLimit,
                                   _priceMaxLimit,
@@ -825,9 +693,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                               ),
                             ),
                             child: Text(
-                              selectedFilters.isEmpty
-                                  ? 'Done'
-                                  : 'Done (${selectedFilters.length})',
+                              'Done',
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w600,
@@ -848,16 +714,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 10. MAIN UI
+  // 13. MAIN UI
   // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
     final visibleProducts = filteredProducts;
 
-    final String screenTitle = _selectedCategory == 'All'
-        ? 'All Products'
-        : _selectedCategory;
+    final String screenTitle = _selectedCategory?.displayName ?? 'All Products';
 
     return Scaffold(
       backgroundColor: const Color(0xFFFCF9F7),
@@ -948,7 +812,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             // ================================================================
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
-
               child: Column(
                 children: [
                   Text(
@@ -964,7 +827,9 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                   const SizedBox(height: 2),
 
                   Text(
-                    '${visibleProducts.length} Products available',
+                    _selectedCategory == null
+                        ? '${_products.length}${_hasMore ? '+' : ''} Products available'
+                        : '${_selectedCategory!.count} Products available',
                     textAlign: TextAlign.center,
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 12,
@@ -978,31 +843,81 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             const SizedBox(height: 16),
 
             // ================================================================
-            // CATEGORY CHIPS
+            // CATEGORY CHIPS (API — loading / error / list)
             // ================================================================
             SizedBox(
               height: 42,
 
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
+              child: _isLoadingCategories
+                  ? const Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF087524),
+                        ),
+                      ),
+                    )
+                  : _categoriesError != null
+                  ? Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.error_outline,
+                            size: 16,
+                            color: Color(0xFFC62828),
+                          ),
 
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+                          const SizedBox(width: 6),
 
-                children: [
-                  _buildCategoryChip('All'),
-                  const SizedBox(width: 10),
-                  _buildCategoryChip('Insecticides'),
-                  const SizedBox(width: 10),
-                  _buildCategoryChip('Herbicides'),
-                  const SizedBox(width: 10),
-                  _buildCategoryChip('Fungicides'),
-                  const SizedBox(width: 10),
-                  _buildCategoryChip('PGRs'),
-                  const SizedBox(width: 10),
-                  _buildCategoryChip('Seed Care'),
-                ],
-              ),
+                          Text(
+                            'Categories failed',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              color: const Color(0xFF666666),
+                            ),
+                          ),
+
+                          TextButton(
+                            onPressed: _loadCategories,
+                            child: Text(
+                              'Retry',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: const Color(0xFF087524),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : ListView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+
+                      children: [
+                        _buildCategoryChip(
+                          'All',
+                          isSelected: _selectedCategory == null,
+                          onTap: () => _selectCategory(null),
+                        ),
+
+                        for (final category in _categories) ...[
+                          const SizedBox(width: 10),
+
+                          _buildCategoryChip(
+                            category.displayName,
+                            isSelected: _selectedCategory?.id == category.id,
+                            onTap: () => _selectCategory(category),
+                          ),
+                        ],
+                      ],
+                    ),
             ),
 
             const SizedBox(height: 16),
@@ -1101,40 +1016,19 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     ],
                   ),
 
-                  // ---- Active Filter Chips ----
-                  if (selectedFilters.isNotEmpty || _isPriceFilterActive) ...[
+                  // ---- Price Filter Chip ----
+                  if (_isPriceFilterActive) ...[
                     const SizedBox(height: 14),
 
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              if (_isPriceFilterActive) _buildPriceChip(),
-
-                              ...selectedFilters.map((filter) {
-                                return _buildFilterChip(
-                                  text: filter,
-                                  onRemove: () {
-                                    setState(() {
-                                      selectedFilters.remove(filter);
-                                    });
-                                  },
-                                );
-                              }),
-                            ],
-                          ),
-                        ),
+                        _buildPriceChip(),
 
                         const SizedBox(width: 8),
 
                         InkWell(
                           onTap: () {
                             setState(() {
-                              selectedFilters.clear();
                               _priceRange = const RangeValues(
                                 _priceMinLimit,
                                 _priceMaxLimit,
@@ -1144,7 +1038,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                           child: Padding(
                             padding: const EdgeInsets.only(top: 7),
                             child: Text(
-                              'Clear all',
+                              'Clear',
                               style: GoogleFonts.plusJakartaSans(
                                 fontSize: 12,
                                 color: const Color(0xFF087524),
@@ -1166,7 +1060,15 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             // PRODUCTS GRID + EXPLORE MORE (scroll ke saath)
             // ================================================================
             Expanded(
-              child: visibleProducts.isEmpty
+              child: _isLoadingProducts
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF087524),
+                      ),
+                    )
+                  : _productsError != null
+                  ? _buildProductsError()
+                  : visibleProducts.isEmpty
                   ? Center(
                       child: Text(
                         'No products found',
@@ -1200,62 +1102,77 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                           ),
                         ),
 
-                        // ---- Explore More (scroll ke END mein) ----
+                        // ---- Explore More (REAL pagination) ----
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(42, 0, 42, 12),
-
                             child: SizedBox(
                               width: double.infinity,
                               height: 52,
 
-                              child: OutlinedButton(
-                                onPressed: _hasMoreProducts
-                                    ? _loadMoreProducts
-                                    : null,
+                              child: _isLoadingMore
+                                  ? const Center(
+                                      child: SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFF087524),
+                                        ),
+                                      ),
+                                    )
+                                  : OutlinedButton(
+                                      onPressed: _hasMore
+                                          ? () => _loadProducts(loadMore: true)
+                                          : null,
 
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: const Color(0xFF087524),
-                                  side: BorderSide(
-                                    color: _hasMoreProducts
-                                        ? const Color(0xFF087524)
-                                        : const Color(0xFFD5E2D3),
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: const Color(
+                                          0xFF087524,
+                                        ),
+                                        side: BorderSide(
+                                          color: _hasMore
+                                              ? const Color(0xFF087524)
+                                              : const Color(0xFFD5E2D3),
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                      ),
 
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Text(
-                                      _hasMoreProducts
-                                          ? 'Explore More Products'
-                                          : 'All Products Loaded',
-                                      style: GoogleFonts.plusJakartaSans(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w500,
-                                        color: _hasMoreProducts
-                                            ? const Color(0xFF087524)
-                                            : const Color(0xFF999999),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            _hasMore
+                                                ? 'Explore More Products'
+                                                : 'All Products Loaded',
+                                            style: GoogleFonts.plusJakartaSans(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w500,
+                                              color: _hasMore
+                                                  ? const Color(0xFF087524)
+                                                  : const Color(0xFF999999),
+                                            ),
+                                          ),
+
+                                          const SizedBox(width: 8),
+
+                                          Icon(
+                                            _hasMore
+                                                ? Icons.keyboard_arrow_down
+                                                : Icons.check_circle_outline,
+                                            size: 20,
+                                            color: _hasMore
+                                                ? const Color(0xFF087524)
+                                                : const Color(0xFF999999),
+                                          ),
+                                        ],
                                       ),
                                     ),
-
-                                    const SizedBox(width: 8),
-
-                                    Icon(
-                                      _hasMoreProducts
-                                          ? Icons.keyboard_arrow_down
-                                          : Icons.check_circle_outline,
-                                      size: 20,
-                                      color: _hasMoreProducts
-                                          ? const Color(0xFF087524)
-                                          : const Color(0xFF999999),
-                                    ),
-                                  ],
-                                ),
-                              ),
                             ),
                           ),
                         ),
@@ -1264,10 +1181,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.only(bottom: 16),
-
                             child: Center(
                               child: Text(
-                                'Showing ${visibleProducts.length} of ${products.length} results',
+                                _selectedCategory == null
+                                    ? 'Showing ${visibleProducts.length} results'
+                                    : 'Showing ${visibleProducts.length} of ${_selectedCategory!.count} results',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 12,
                                   color: const Color(0xFF666666),
