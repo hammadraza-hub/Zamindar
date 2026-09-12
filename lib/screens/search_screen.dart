@@ -1,21 +1,28 @@
+import 'dart:async';
+
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../models/product.dart';
+import '../repositories/product_repository.dart';
 import '../services/cart_provider.dart';
 import 'account_screen.dart';
 import 'cart_screen.dart';
 import 'categories_screen.dart';
 import 'checkout_screen.dart';
+import 'product_detail_screen.dart';
 
 // ============================================================================
-// SEARCH SCREEN (GLOBAL)
+// SEARCH SCREEN (GLOBAL — LIVE API)
 //
 // Do type ke results:
 //   1. PAGES — app ke features (Account, Cart, Settings...)
-//   2. PRODUCTS — naam ya brand se match
+//   2. PRODUCTS — zamindar.co API se LIVE search
 //
-// Kuch bhi likho — jo match ho wo dikhta hai!
+// Smart search: type karna band karo → 500ms → API call
+// (har harf par nahi — fast aur battery-friendly!)
 // ============================================================================
 
 class SearchScreen extends StatefulWidget {
@@ -31,20 +38,27 @@ class _SearchScreenState extends State<SearchScreen> {
   // ==========================================================================
 
   final TextEditingController _searchController = TextEditingController();
+  final ProductRepository _repository = ProductRepository();
 
   String _searchQuery = '';
 
+  // ---- API products state ----
+  List<Product> _products = [];
+  bool _isLoading = false;
+  String? _error;
+
+  /// Debounce — user type karna band kare to hi API call ho.
+  Timer? _debounce;
+
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchController.dispose();
     super.dispose();
   }
 
   // ==========================================================================
   // 2. APP PAGES (searchable features)
-  //
-  // title/subtitle match → result dikhta hai
-  // action → navigation
   // ==========================================================================
 
   final List<Map<String, dynamic>> _appPages = [
@@ -52,12 +66,6 @@ class _SearchScreenState extends State<SearchScreen> {
       'title': 'My Account',
       'subtitle': 'Profile, orders & settings',
       'icon': Icons.person_outline,
-      'action': 'account',
-    },
-    {
-      'title': 'Edit Profile',
-      'subtitle': 'Change name, phone & photo',
-      'icon': Icons.edit_outlined,
       'action': 'account',
     },
     {
@@ -85,213 +93,75 @@ class _SearchScreenState extends State<SearchScreen> {
       'action': 'coming_soon',
     },
     {
-      'title': 'Saved Addresses',
-      'subtitle': 'Manage delivery addresses',
-      'icon': Icons.location_on_outlined,
-      'action': 'coming_soon',
-    },
-    {
-      'title': 'Notifications',
-      'subtitle': 'Offers & order updates',
-      'icon': Icons.notifications_outlined,
-      'action': 'coming_soon',
-    },
-    {
-      'title': 'Payment Methods',
-      'subtitle': 'COD & bank transfer',
-      'icon': Icons.credit_card_outlined,
-      'action': 'coming_soon',
-    },
-    {
       'title': 'Help & Support',
       'subtitle': 'FAQs & contact us',
-      'icon': Icons.help_outline,
-      'action': 'coming_soon',
-    },
-    {
-      'title': 'Settings',
-      'subtitle': 'App preferences',
-      'icon': Icons.settings_outlined,
+      'icon': Icons.help_outline_outlined,
       'action': 'coming_soon',
     },
   ];
 
   // ==========================================================================
-  // 3. PRODUCTS DATA
+  // 3. SEARCH — debounced API call
   // ==========================================================================
 
-  final List<Map<String, dynamic>> _allProducts = [
-    // ---- INSECTICIDES ----
-    {
-      'id': 'confidor-200-sl',
-      'name': 'Confidor 200 SL',
-      'brand': 'Bayer',
-      'price': 1850,
-      'image': 'assets/images/whats_new3img.png',
-    },
-    {
-      'id': 'belt-480-sc',
-      'name': 'Belt 480 SC',
-      'brand': 'Bayer',
-      'price': 1240,
-      'image': 'assets/images/whats_new4img.png',
-    },
-    {
-      'id': 'movento-240-sc',
-      'name': 'Movento 240 SC',
-      'brand': 'Bayer',
-      'price': 980,
-      'image': 'assets/images/whats_new5img.png',
-    },
-    {
-      'id': 'decis-100-ec',
-      'name': 'Decis 100 EC',
-      'brand': 'Bayer',
-      'price': 650,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
-    {
-      'id': 'actara-25-wg',
-      'name': 'ACTARA 25 WG (24 GM)',
-      'brand': 'Syngenta',
-      'price': 500,
-      'image': 'assets/images/whats_new5img.png',
-    },
-    {
-      'id': 'ampligo-150-zc',
-      'name': 'AMPLIGO 150 ZC (160 Ml)',
-      'brand': 'Syngenta',
-      'price': 2800,
-      'image': 'assets/images/whats_new2img (2).png',
-    },
-    {
-      'id': 'mithu-800ml',
-      'name': 'Mithu – 800 Mls',
-      'brand': 'Orange Production',
-      'price': 1499,
-      'image': 'assets/images/whats_new4img.png',
-    },
-    {
-      'id': 'zehrelli-400ml',
-      'name': 'Zehrelli – 400 Mls',
-      'brand': 'Sohni Dharti',
-      'price': 640,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
+  void _onSearchChanged(String value) {
+    setState(() {
+      _searchQuery = value.trim();
+    });
 
-    // ---- HERBICIDES ----
-    {
-      'id': 'orange-amine-500ml',
-      'name': 'Orange Amine – 500 Mls',
-      'brand': 'Orange Production',
-      'price': 880,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
-    {
-      'id': 'orange-amine-1ltr',
-      'name': 'Orange Amine – 1 Ltr',
-      'brand': 'Orange Production',
-      'price': 1450,
-      'image': 'assets/images/whats_new3img.png',
-    },
-    {
-      'id': 'adengo-xtra-132ml',
-      'name': 'Adengo Xtra 132ml',
-      'brand': 'Bayer',
-      'price': 2700,
-      'image': 'assets/images/whats_new4img.png',
-    },
+    // Purana timer cancel
+    _debounce?.cancel();
 
-    // ---- FUNGICIDES ----
-    {
-      'id': 'aliette-250g',
-      'name': 'Aliette 80% WP 250g',
-      'brand': 'Bayer',
-      'price': 1250,
-      'image': 'assets/images/whats_new3img.png',
-    },
-    {
-      'id': 'amistar-top-200ml',
-      'name': 'Amistar Top 325 SC',
-      'brand': 'Syngenta',
-      'price': 1550,
-      'image': 'assets/images/whats_new5img.png',
-    },
-    {
-      'id': 'antracol-70wp',
-      'name': 'Antracol 70 WP 1kg',
-      'brand': 'Bayer',
-      'price': 3800,
-      'image': 'assets/images/whats_new4img.png',
-    },
+    // Khali → kuch nahi maangna
+    if (_searchQuery.isEmpty) {
+      setState(() {
+        _products = [];
+        _error = null;
+        _isLoading = false;
+      });
+      return;
+    }
 
-    // ---- PGRs ----
-    {
-      'id': 'ambition-500ml',
-      'name': 'Ambition 500ml',
-      'brand': 'Bayer',
-      'price': 1900,
-      'image': 'assets/images/whats_new2img (2).png',
-    },
-    {
-      'id': 'subah-800ml',
-      'name': 'Subah – 800 Mls',
-      'brand': 'Sohni Dharti',
-      'price': 780,
-      'image': 'assets/images/whats_new4img.png',
-    },
-
-    // ---- SEED CARE ----
-    {
-      'id': 'hybrid-corn-seeds',
-      'name': 'Hybrid Corn Seeds (1kg)',
-      'brand': 'Sakata Seeds',
-      'price': 3500,
-      'image': 'assets/images/whats_new5img.png',
-    },
-    {
-      'id': 'wheat-seeds',
-      'name': 'Wheat Seeds (Certified)',
-      'brand': 'Sohni Dharti',
-      'price': 1200,
-      'image': 'assets/images/whats_new2img (1).png',
-    },
-  ];
-
-  // ==========================================================================
-  // 4. SEARCH LOGIC
-  // ==========================================================================
-
-  /// Khali search → koi page result nahi (sirf products)
-  List<Map<String, dynamic>> get _pageResults {
-    if (_searchQuery.isEmpty) return [];
-
-    final String query = _searchQuery.toLowerCase();
-
-    return _appPages.where((page) {
-      final String title = page['title'].toString().toLowerCase();
-      final String subtitle = page['subtitle'].toString().toLowerCase();
-
-      return title.contains(query) || subtitle.contains(query);
-    }).toList();
+    // 500ms ruk kar API call
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      _searchProducts(_searchQuery);
+    });
   }
 
-  /// Products — naam ya brand se match
-  List<Map<String, dynamic>> get _searchResults {
-    if (_searchQuery.isEmpty) return _allProducts;
+  /// zamindar.co se products search karta hai.
+  Future<void> _searchProducts(String term) async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
-    final String query = _searchQuery.toLowerCase();
+    try {
+      final results = await _repository.searchProducts(term, perPage: 20);
 
-    return _allProducts.where((product) {
-      final String name = product['name'].toString().toLowerCase();
-      final String brand = product['brand'].toString().toLowerCase();
+      if (!mounted) return;
 
-      return name.contains(query) || brand.contains(query);
-    }).toList();
+      setState(() {
+        _products = results;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Search chip par tap → wahi search dobara.
+  void _searchFromSuggestion(String term) {
+    _searchController.text = term;
+    _onSearchChanged(term);
   }
 
   // ==========================================================================
-  // 5. NAVIGATION — page result tap par
+  // 4. NAVIGATION — page result tap par
   // ==========================================================================
 
   void _openPage(Map<String, dynamic> page) {
@@ -327,22 +197,14 @@ class _SearchScreenState extends State<SearchScreen> {
         break;
 
       default:
-        // Coming soon pages
         _showMessage('${page['title']} — coming soon');
         break;
     }
   }
 
   // ==========================================================================
-  // 6. HELPERS
+  // 5. HELPERS
   // ==========================================================================
-
-  String _formatPrice(int amount) {
-    return amount.toString().replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-      (match) => '${match[1]},',
-    );
-  }
 
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -359,19 +221,33 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  void _addToCart(Map<String, dynamic> product) {
+  void _addToCart(Product product) {
+    final String image = product.imageThumbnailUrl ?? product.imageUrl ?? '';
+
     context.read<CartProvider>().addProduct(
-      id: product['id'] as String,
-      name: product['name'] as String,
-      price: product['price'] as int,
-      image: product['image'] as String,
+      id: product.id.toString(),
+      name: product.name,
+      price: product.price.round(),
+      image: image,
     );
 
-    _showMessage('${product['name']} added to cart');
+    _showMessage('${product.name} added to cart');
+  }
+
+  Widget _imagePlaceholder() {
+    return Container(
+      color: const Color(0xFFF0EEEE),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.image_outlined,
+        size: 24,
+        color: Color(0xFFBBBBBB),
+      ),
+    );
   }
 
   // ==========================================================================
-  // 7. SEARCH BAR
+  // 6. SEARCH BAR
   // ==========================================================================
 
   Widget _buildSearchBar() {
@@ -400,13 +276,8 @@ class _SearchScreenState extends State<SearchScreen> {
           Expanded(
             child: TextField(
               controller: _searchController,
-              autofocus: true,
 
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.trim();
-                });
-              },
+              onChanged: _onSearchChanged,
 
               style: GoogleFonts.plusJakartaSans(
                 fontSize: 15,
@@ -424,12 +295,26 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
 
-          if (_searchQuery.isNotEmpty)
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Color(0xFF087524),
+                ),
+              ),
+            )
+          else if (_searchQuery.isNotEmpty)
             IconButton(
               onPressed: () {
                 _searchController.clear();
                 setState(() {
                   _searchQuery = '';
+                  _products = [];
+                  _error = null;
                 });
               },
               icon: const Icon(Icons.close, size: 20, color: Color(0xFF999999)),
@@ -442,7 +327,7 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ==========================================================================
-  // 8. PAGE RESULT ROW (icon + title + subtitle + chevron)
+  // 7. PAGE RESULT ROW
   // ==========================================================================
 
   Widget _buildPageRow(Map<String, dynamic> page) {
@@ -469,7 +354,6 @@ class _SearchScreenState extends State<SearchScreen> {
 
         child: Row(
           children: [
-            // --- Icon circle ---
             Container(
               width: 44,
               height: 44,
@@ -488,7 +372,6 @@ class _SearchScreenState extends State<SearchScreen> {
 
             const SizedBox(width: 14),
 
-            // --- Title + Subtitle ---
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -515,7 +398,6 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
 
-            // --- Chevron (>) ---
             const Icon(
               Icons.arrow_forward_ios,
               size: 14,
@@ -528,126 +410,151 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ==========================================================================
-  // 9. PRODUCT RESULT ROW
+  // 8. PRODUCT RESULT ROW (API product — tap → detail screen)
   // ==========================================================================
 
-  Widget _buildResultRow(Map<String, dynamic> product) {
+  Widget _buildResultRow(Product product) {
     final CartProvider cart = context.watch<CartProvider>();
+
+    final String cartId = product.id.toString();
 
     int quantityInCart = 0;
 
     for (final item in cart.items) {
-      if (item.id == product['id']) {
+      if (item.id == cartId) {
         quantityInCart = item.quantity;
         break;
       }
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(10),
+    final String? imageUrl = product.imageThumbnailUrl ?? product.imageUrl;
 
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+    return InkWell(
+      // ---- Tap → DETAIL SCREEN ----
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(product: product),
           ),
-        ],
-      ),
+        );
+      },
 
-      child: Row(
-        children: [
-          // --- Image ---
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.asset(
-              product['image'],
-              width: 60,
-              height: 60,
-              fit: BoxFit.cover,
+      borderRadius: BorderRadius.circular(12),
+
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(10),
+
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
-          ),
+          ],
+        ),
 
-          const SizedBox(width: 14),
-
-          // --- Details ---
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product['brand'].toString().toUpperCase(),
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 10,
-                    color: const Color(0xFF999999),
-                  ),
-                ),
-
-                const SizedBox(height: 2),
-
-                Text(
-                  product['name'],
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500,
-                    color: const Color(0xFF303030),
-                  ),
-                ),
-
-                const SizedBox(height: 4),
-
-                Text(
-                  'Rs ${_formatPrice(product['price'] as int)}',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF087524),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // --- (+) Button ---
-          InkWell(
-            onTap: () => _addToCart(product),
-            borderRadius: BorderRadius.circular(50),
-
-            child: Container(
-              width: 40,
-              height: 40,
-              alignment: Alignment.center,
-
-              decoration: const BoxDecoration(
-                color: Color(0xFFFF7900),
-                shape: BoxShape.circle,
+        child: Row(
+          children: [
+            // --- Image (network) ---
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 60,
+                height: 60,
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        fit: BoxFit.cover,
+                        placeholder: (_, _) => _imagePlaceholder(),
+                        errorWidget: (_, _, _) => _imagePlaceholder(),
+                      )
+                    : _imagePlaceholder(),
               ),
-
-              child: quantityInCart > 0
-                  ? Text(
-                      '$quantityInCart',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF202020),
-                      ),
-                    )
-                  : const Icon(Icons.add, size: 22, color: Color(0xFF202020)),
             ),
-          ),
-        ],
+
+            const SizedBox(width: 14),
+
+            // --- Details ---
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (product.categoryNames.isNotEmpty)
+                    Text(
+                      product.categoryNames.first.toUpperCase(),
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 10,
+                        color: const Color(0xFF999999),
+                      ),
+                    ),
+
+                  const SizedBox(height: 2),
+
+                  Text(
+                    product.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF303030),
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  Text(
+                    product.displayPrice,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF087524),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // --- (+) Button ---
+            InkWell(
+              onTap: () => _addToCart(product),
+              borderRadius: BorderRadius.circular(50),
+
+              child: Container(
+                width: 40,
+                height: 40,
+                alignment: Alignment.center,
+
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFF7900),
+                  shape: BoxShape.circle,
+                ),
+
+                child: quantityInCart > 0
+                    ? Text(
+                        '$quantityInCart',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF202020),
+                        ),
+                      )
+                    : const Icon(Icons.add, size: 22, color: Color(0xFF202020)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   // ==========================================================================
-  // 10. SECTION HEADER (chhota label — "Pages" ya "Products")
+  // 9. SECTION LABEL
   // ==========================================================================
 
   Widget _buildSectionLabel(String label) {
@@ -666,15 +573,26 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ==========================================================================
-  // 11. MAIN UI
+  // 10. MAIN UI
   // ==========================================================================
+
+  /// Pages jo query se match karte hain.
+  List<Map<String, dynamic>> get _pageResults {
+    if (_searchQuery.isEmpty) return [];
+
+    final String query = _searchQuery.toLowerCase();
+
+    return _appPages.where((page) {
+      final String title = page['title'].toString().toLowerCase();
+      final String subtitle = page['subtitle'].toString().toLowerCase();
+
+      return title.contains(query) || subtitle.contains(query);
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
     final pages = _pageResults;
-    final products = _searchResults;
-
-    final bool hasAnyResult = pages.isNotEmpty || products.isNotEmpty;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFCF9F7),
@@ -708,38 +626,11 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
 
-            // --- Results ---
+            // --- Body ---
             Expanded(
-              // Khali search + no results → empty state
-              // warna → list
-              child: !hasAnyResult
-                  ? _buildEmptyState()
-                  : ListView(
-                      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
-
-                      children: [
-                        // ---- PAGES section ----
-                        if (pages.isNotEmpty) ...[
-                          _buildSectionLabel('PAGES & FEATURES'),
-
-                          for (final page in pages) _buildPageRow(page),
-
-                          const SizedBox(height: 16),
-                        ],
-
-                        // ---- PRODUCTS section ----
-                        if (products.isNotEmpty) ...[
-                          _buildSectionLabel(
-                            _searchQuery.isEmpty
-                                ? 'ALL PRODUCTS (${products.length})'
-                                : 'PRODUCTS (${products.length})',
-                          ),
-
-                          for (final product in products)
-                            _buildResultRow(product),
-                        ],
-                      ],
-                    ),
+              child: _searchQuery.isEmpty
+                  ? _buildSuggestions()
+                  : _buildResults(pages),
             ),
           ],
         ),
@@ -748,7 +639,96 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   // ==========================================================================
-  // 12. EMPTY STATE
+  // 11. RESULTS (khali na ho to)
+  // ==========================================================================
+
+  Widget _buildResults(List<Map<String, dynamic>> pages) {
+    final bool noResults =
+        pages.isEmpty && _products.isEmpty && !_isLoading && _error == null;
+
+    if (_error != null) return _buildErrorState();
+    if (noResults) return _buildEmptyState();
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+
+      children: [
+        // ---- PAGES ----
+        if (pages.isNotEmpty) ...[
+          _buildSectionLabel('PAGES & FEATURES'),
+
+          for (final page in pages) _buildPageRow(page),
+
+          const SizedBox(height: 16),
+        ],
+
+        // ---- PRODUCTS ----
+        if (_products.isNotEmpty) ...[
+          _buildSectionLabel('PRODUCTS (${_products.length})'),
+
+          for (final product in _products) _buildResultRow(product),
+        ],
+      ],
+    );
+  }
+
+  // ==========================================================================
+  // 12. SUGGESTIONS (khali search par)
+  // ==========================================================================
+
+  Widget _buildSuggestions() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+
+      children: [
+        _buildSectionLabel('POPULAR SEARCHES'),
+
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children:
+              [
+                    'Subah',
+                    'Mithu',
+                    'Confidor',
+                    'Fertilizer',
+                    'Insecticide',
+                    'Fungicide',
+                    'Herbicide',
+                    'Seeds',
+                  ]
+                  .map(
+                    (term) => InkWell(
+                      onTap: () => _searchFromSuggestion(term),
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 9,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFD5E2D3)),
+                        ),
+                        child: Text(
+                          term,
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 13,
+                            color: const Color(0xFF303030),
+                          ),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+        ),
+      ],
+    );
+  }
+
+  // ==========================================================================
+  // 13. EMPTY STATE
   // ==========================================================================
 
   Widget _buildEmptyState() {
@@ -784,7 +764,7 @@ class _SearchScreenState extends State<SearchScreen> {
           const SizedBox(height: 6),
 
           Text(
-            'Try a product name, brand or feature',
+            'Try a product name or category',
             style: GoogleFonts.plusJakartaSans(
               fontSize: 13,
               color: const Color(0xFF666666),
@@ -798,6 +778,7 @@ class _SearchScreenState extends State<SearchScreen> {
               _searchController.clear();
               setState(() {
                 _searchQuery = '';
+                _products = [];
               });
             },
             child: Text(
@@ -810,6 +791,62 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // 14. ERROR STATE
+  // ==========================================================================
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.wifi_off_outlined,
+              size: 36,
+              color: Color(0xFF999999),
+            ),
+
+            const SizedBox(height: 12),
+
+            Text(
+              _error ?? 'Something went wrong.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 13,
+                color: const Color(0xFF555555),
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
+            ElevatedButton.icon(
+              onPressed: () => _searchProducts(_searchQuery),
+              icon: const Icon(Icons.refresh, size: 18),
+              label: Text(
+                'Retry',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF087524),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 22,
+                  vertical: 10,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
