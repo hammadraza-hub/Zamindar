@@ -24,13 +24,17 @@ import 'main_navigation_screen.dart';
 class OrderSuccessScreen extends StatefulWidget {
   final List<CartItem> items;
   final int totalAmount;
-  final String paymentMethod; // ← NAYA
+  final String paymentMethod;
+  final String? realOrderNumber; // ASLI website wala order number
+  final String? orderStatus; // asli status (Processing waghera)
 
   const OrderSuccessScreen({
     super.key,
     required this.items,
     required this.totalAmount,
     this.paymentMethod = 'Cash on Delivery', // ← NAYA
+    this.realOrderNumber,
+    this.orderStatus,
   });
 
   @override
@@ -372,9 +376,17 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
                       // Order ID
                       _detailRow(
                         label: 'Order ID',
-                        value: _orderId,
+                        value: widget.realOrderNumber ?? _orderId,
                         icon: Icons.receipt_long_outlined,
                       ),
+
+                      // Asli status (real order par)
+                      if (widget.orderStatus != null)
+                        _detailRow(
+                          label: 'Order Status',
+                          value: widget.orderStatus!,
+                          icon: Icons.info_outline,
+                        ),
 
                       // Order Date
                       _detailRow(

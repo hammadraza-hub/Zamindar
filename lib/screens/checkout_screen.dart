@@ -3,13 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
+import '../providers/auth_provider.dart';
+import '../services/api/checkout_service.dart';
+import '../services/auth/auth_service.dart';
 import '../services/cart_provider.dart';
+import '../widgets/custom_button.dart';
 import 'order_success_screen.dart';
+import '../services/address_service.dart';
 
 // ============================================================================
-// CHECKOUT SCREEN
+// CHECKOUT SCREEN — ASLI ORDER (WooCommerce Store API)
 //
-// Flow: Cart → PROCEED TO CHECKOUT → YE SCREEN → PLACE ORDER → Success
+// Flow: Cart → YE SCREEN → PLACE ORDER → asli order website par → Success
 // ============================================================================
 
 class CheckoutScreen extends StatefulWidget {
@@ -21,16 +26,54 @@ class CheckoutScreen extends StatefulWidget {
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
   // ==========================================================================
-  // 1. DELIVERY ADDRESS (editable — Change button se update hoti hai)
+  // 1. DELIVERY ADDRESS (complete — order ke liye zaroori fields)
   // ==========================================================================
 
-  String _addressName = 'Ahmed Khan';
-  String _addressPhone = '+92 300 1234567';
-  String _addressLine = 'Haq Bahu Farm, Chak 45-SB, Sargodha, Punjab';
+  String _addressName = '';
+  String _addressPhone = '';
+  String _addressEmail = '';
+  String _addressLine = '';
+  String _addressCity = '';
+  String _addressState = 'Punjab';
+  String _addressPostcode = '';
 
   /// Selected payment — 'bank_transfer' ya 'cod'
-  /// (web jaisa default: Direct Bank Transfer)
   String _selectedPayment = 'bank_transfer';
+
+  bool _isPlacingOrder = false;
+  bool _orderPlaced = false; // ek hi order per screen
+  @override
+  void initState() {
+    super.initState();
+
+    // Saved address + login info load karo
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // ---- (1) Saved address (pehle se bhari rahe!) ----
+      final saved = await AddressService.load();
+
+      if (!mounted) return;
+
+      // ---- (2) Login user ka naam/email (fallback) ----
+      final auth = context.read<AuthProvider>();
+
+      setState(() {
+        if (saved != null) {
+          _addressName = saved['name']!;
+          _addressPhone = saved['phone']!;
+          _addressEmail = saved['email']!;
+          _addressLine = saved['address']!;
+          _addressCity = saved['city']!;
+          _addressState = saved['state']!;
+          _addressPostcode = saved['postcode']!;
+        } else if (auth.isLoggedIn) {
+          // Saved nahi → kam az kam naam/email to bhar do
+          _addressName = auth.userName;
+          _addressEmail = auth.userEmail;
+        }
+      });
+    });
+  }
+
   // ==========================================================================
   // 2. HELPERS
   // ==========================================================================
@@ -42,7 +85,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -51,100 +94,158 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           message,
           style: GoogleFonts.plusJakartaSans(color: Colors.white),
         ),
-        duration: const Duration(seconds: 1),
-        backgroundColor: const Color(0xFF087524),
+        duration: const Duration(seconds: 2),
+        backgroundColor: isError
+            ? const Color(0xFFC62828)
+            : const Color(0xFF087524),
       ),
     );
   }
 
   // ==========================================================================
-  // 2b. CHANGE ADDRESS — sheet kholta hai
-  //
-  // Sheet ka content alag widget (_ChangeAddressSheet) hai — file
-  // ke end par. Controllers/keyboard uske apne lifecycle mein hain.
+  // 2b. CHANGE ADDRESS — complete address sheet
   // ==========================================================================
 
   Future<void> _changeAddress() async {
     final result = await showModalBottomSheet<Map<String, String>>(
       context: context,
-
-      // Keyboard khulne par sheet upar uth ti hai
       isScrollControlled: true,
-
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-
       builder: (sheetContext) {
         return _ChangeAddressSheet(
           currentName: _addressName,
           currentPhone: _addressPhone,
+          currentEmail: _addressEmail,
           currentAddress: _addressLine,
+          currentCity: _addressCity,
+          currentState: _addressState,
+          currentPostcode: _addressPostcode,
         );
       },
     );
 
-    // SAVE hua → address update
     if (result != null) {
       setState(() {
         _addressName = result['name']!;
         _addressPhone = result['phone']!;
+        _addressEmail = result['email']!;
         _addressLine = result['address']!;
+        _addressCity = result['city']!;
+        _addressState = result['state']!;
+        _addressPostcode = result['postcode']!;
       });
 
-      _showMessage('Delivery address updated');
+      // ---- PERMANENT SAVE (agli baar pehle se bhari rahe!) ----
+      await AddressService.save(
+        name: _addressName,
+        phone: _addressPhone,
+        email: _addressEmail,
+        addressLine: _addressLine,
+        city: _addressCity,
+        state: _addressState,
+        postcode: _addressPostcode,
+      );
+
+      _showMessage('Delivery address saved');
     }
   }
 
   // ==========================================================================
-  // 3. PLACE ORDER
-  //
-  // ORDER: COPY → TOTAL → CLEAR → OrderSuccess
-  // (COPY hamesha CLEAR se PEHLE!)
+  // 3. PLACE ORDER — ASLI WooCommerce ORDER!
   // ==========================================================================
 
-  void _placeOrder() {
+  Future<void> _placeOrder() async {
+    // --- GUARD: order chal raha hai YA ho chuka ---
+    if (_isPlacingOrder || _orderPlaced) return;
+
+    setState(() => _isPlacingOrder = true);
+
+    // --- GUARD 2: cart reference pehle le lo ---
     final CartProvider cart = context.read<CartProvider>();
 
-    if (cart.items.isEmpty) return;
+    if (cart.items.isEmpty) {
+      setState(() => _isPlacingOrder = false);
+      return;
+    }
 
-    // (1) COPY — cart items ki snapshot
-    final List<CartItem> orderedItems = List<CartItem>.from(cart.items);
+    try {
+      // ---- Naam first/last mein ----
+      final nameParts = _addressName.trim().split(RegExp(r'\s+'));
+      final String firstName = nameParts.isNotEmpty ? nameParts.first : '';
+      final String lastName = nameParts.length > 1
+          ? nameParts.sublist(1).join(' ')
+          : '';
 
-    // (2) TOTAL
-    final int orderTotal = cart.subtotal + cart.deliveryFee;
+      // ---- Address object ----
+      final address = BillingAddress(
+        firstName: firstName,
+        lastName: lastName,
+        phone: _addressPhone,
+        email: _addressEmail,
+        address1: _addressLine,
+        city: _addressCity,
+        state: _addressState,
+        postcode: _addressPostcode,
+      );
 
-    // (3) CLEAR — order complete
-    cart.clearCart();
+      // ---- JWT token (login user ho to order uske naam) ----
+      final token = await AuthService.getToken();
 
-    // (4) OrderSuccess — real data + SELECTED payment method
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (_) => OrderSuccessScreen(
-          items: orderedItems,
-          totalAmount: orderTotal,
+      // ---- ASLI ORDER! ----
+      final result = await CheckoutService.placeOrder(
+        items: cart.items,
+        address: address,
+        paymentMethod: _selectedPayment == 'cod' ? 'cod' : 'bacs',
+        jwtToken: token,
+      );
 
-          // Jo method select kiya — wahi success par dikhega
-          paymentMethod: _selectedPayment == 'cod'
-              ? 'Cash on Delivery'
-              : 'Direct Bank Transfer',
+      if (!mounted) return;
+
+      // ---- ORDER PLACED flag (dobara kabhi na chale!) ----
+      _orderPlaced = true;
+
+      // ---- Cart snapshot (success screen ke liye) ----
+      final List<CartItem> orderedItems = List<CartItem>.from(cart.items);
+
+      // ---- ORDER PLACED flag (rebuild par dobara na chale!) ----
+      _orderPlaced = true;
+
+      // ---- Local total capture (server total nahi bhejta!) ----
+      final int localTotal = cart.totalAmount;
+
+      // ---- Cart clear ----
+      cart.clearCart();
+      // ---- SUCCESS — ASLI order number ke sath! ----
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => OrderSuccessScreen(
+            items: orderedItems,
+            totalAmount: result.totalRs > 0 ? result.totalRs : localTotal,
+            paymentMethod: _selectedPayment == 'cod'
+                ? 'Cash on Delivery'
+                : 'Direct Bank Transfer',
+            realOrderNumber: result.orderNumber.toString(),
+            orderStatus: result.statusDisplay,
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isPlacingOrder = false);
+      _showMessage(e.toString(), isError: true);
+    }
   }
 
   // ==========================================================================
   // 3b. SMART ITEM IMAGE (network + asset dono support)
-  //
-  // API products ki image internet URL hoti hai (http...),
-  // purane hardcoded products ki local asset (assets/...).
-  // Yeh widget dono handle karta hai + empty case bhi.
   // ==========================================================================
 
   Widget _buildItemImage(String image) {
-    // ---- Internet image (API product) ----
     if (image.startsWith('http')) {
       return CachedNetworkImage(
         imageUrl: image,
@@ -156,7 +257,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     }
 
-    // ---- Local asset image (purana hardcoded product) ----
     if (image.isNotEmpty) {
       return Image.asset(
         image,
@@ -167,11 +267,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     }
 
-    // ---- Koi image nahi ----
     return _imagePlaceholder();
   }
 
-  /// Jab image load na ho / exist na kare.
   Widget _imagePlaceholder() {
     return Container(
       width: 52,
@@ -187,7 +285,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   // ==========================================================================
-  // 4. ITEM ROW (Order Summary ke andar)
+  // 4. ITEM ROW
   // ==========================================================================
 
   Widget _buildItemRow(CartItem item) {
@@ -195,7 +293,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          // --- Product Image (network + asset dono support) ---
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: _buildItemImage(item.image),
@@ -203,7 +300,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
           const SizedBox(width: 12),
 
-          // --- Name + Qty ---
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,9 +314,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     color: const Color(0xFF303030),
                   ),
                 ),
-
                 const SizedBox(height: 3),
-
                 Text(
                   'Qty ${item.quantity} × Rs ${_formatPrice(item.price)}',
                   style: GoogleFonts.plusJakartaSans(
@@ -232,7 +326,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
           ),
 
-          // --- Line Total ---
           Text(
             'Rs ${_formatPrice(item.price * item.quantity)}',
             style: GoogleFonts.plusJakartaSans(
@@ -247,7 +340,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   // ==========================================================================
-  // 5. PRICE ROW (Subtotal / Delivery / Total)
+  // 5. PRICE ROW
   // ==========================================================================
 
   Widget _buildPriceRow(String label, String value, {bool isTotal = false}) {
@@ -266,7 +359,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   : const Color(0xFF666666),
             ),
           ),
-
           Text(
             value,
             style: isTotal
@@ -286,7 +378,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   // ==========================================================================
-  // 6. PAYMENT OPTION (radio style)
+  // 6. PAYMENT OPTION
   // ==========================================================================
 
   Widget _buildPaymentOption({
@@ -299,12 +391,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
-
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         margin: const EdgeInsets.only(bottom: 10),
-
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -314,15 +404,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 : const Color(0xFFD5E2D3),
           ),
         ),
-
         child: Row(
           children: [
-            // Icon
             Icon(icon, size: 22, color: const Color(0xFF087524)),
-
             const SizedBox(width: 14),
-
-            // Title + Subtitle
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -335,9 +420,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       color: const Color(0xFF303030),
                     ),
                   ),
-
                   const SizedBox(height: 2),
-
                   Text(
                     subtitle,
                     style: GoogleFonts.plusJakartaSans(
@@ -348,17 +431,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ],
               ),
             ),
-
-            // Radio Circle (selected = green dot)
             Container(
               width: 20,
               height: 20,
-
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFF087524), width: 2),
               ),
-
               child: isSelected
                   ? Center(
                       child: Container(
@@ -379,7 +458,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   // ==========================================================================
-  // 7. CARD DECORATION (sab cards same style)
+  // 7. CARD DECORATION
   // ==========================================================================
 
   BoxDecoration _cardDecoration() {
@@ -398,19 +477,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   // ==========================================================================
   // 8. MAIN UI
-  //
-  // Scroll: [Header] → [Address] → [Order Summary] → [Payment]
-  // Fixed bottom: [Subtotal/Delivery/Total] → [PLACE ORDER]
   // ==========================================================================
 
   @override
   Widget build(BuildContext context) {
-    // LIVE cart data — screen khud CartProvider se parhti hai
     final CartProvider cart = context.watch<CartProvider>();
 
     return Scaffold(
       backgroundColor: const Color(0xFFFCF9F7),
-
       body: SafeArea(
         child: Column(
           children: [
@@ -425,7 +499,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   children: [
                     const SizedBox(height: 12),
 
-                    // --- Header: Back + Title ---
+                    // --- Header ---
                     Row(
                       children: [
                         InkWell(
@@ -440,9 +514,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             ),
                           ),
                         ),
-
                         const SizedBox(width: 12),
-
                         Text(
                           'Checkout',
                           style: GoogleFonts.plusJakartaSans(
@@ -463,14 +535,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(18),
                       decoration: _cardDecoration(),
-
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Title + Change
                           Row(
                             children: [
-                              // Location icon circle
                               Container(
                                 width: 36,
                                 height: 36,
@@ -484,9 +553,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   color: Color(0xFF087524),
                                 ),
                               ),
-
                               const SizedBox(width: 12),
-
                               Text(
                                 'Delivery Address',
                                 style: GoogleFonts.plusJakartaSans(
@@ -495,14 +562,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                   color: const Color(0xFF303030),
                                 ),
                               ),
-
                               const Spacer(),
-
-                              // Change → address edit sheet
                               InkWell(
                                 onTap: _changeAddress,
                                 child: Text(
-                                  'Change',
+                                  _addressName.isEmpty ? 'Add' : 'Change',
                                   style: GoogleFonts.plusJakartaSans(
                                     fontSize: 13,
                                     fontWeight: FontWeight.w600,
@@ -512,44 +576,59 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               ),
                             ],
                           ),
-
                           const SizedBox(height: 14),
 
-                          // Name + Phone
-                          Row(
-                            children: [
-                              Text(
-                                _addressName,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF1B1C1C),
-                                ),
+                          if (_addressName.isEmpty)
+                            Text(
+                              'Please add your delivery address to place the order.',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                height: 1.4,
+                                color: const Color(0xFF999999),
                               ),
-
-                              const SizedBox(width: 10),
-
-                              Text(
-                                _addressPhone,
-                                style: GoogleFonts.plusJakartaSans(
-                                  fontSize: 12,
-                                  color: const Color(0xFF777777),
+                            )
+                          else ...[
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _addressName,
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: const Color(0xFF1B1C1C),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-
-                          const SizedBox(height: 4),
-
-                          // Address line
-                          Text(
-                            _addressLine,
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 13,
-                              height: 1.4,
-                              color: const Color(0xFF666666),
+                                const SizedBox(width: 10),
+                                Text(
+                                  _addressPhone,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    color: const Color(0xFF777777),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$_addressLine, $_addressCity, $_addressState'
+                              '${_addressPostcode.isNotEmpty ? ', $_addressPostcode' : ''}',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 13,
+                                height: 1.4,
+                                color: const Color(0xFF666666),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _addressEmail,
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 12,
+                                color: const Color(0xFF999999),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -557,13 +636,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const SizedBox(height: 16),
 
                     // ==========================================================
-                    // ORDER SUMMARY CARD (REAL cart items)
+                    // ORDER SUMMARY
                     // ==========================================================
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.fromLTRB(18, 16, 18, 6),
                       decoration: _cardDecoration(),
-
                       child: cart.items.isEmpty
                           ? Padding(
                               padding: const EdgeInsets.only(bottom: 12),
@@ -578,7 +656,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           : Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                // Title
                                 Text(
                                   'Order Summary (${cart.totalItems} items)',
                                   style: GoogleFonts.plusJakartaSans(
@@ -587,11 +664,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     color: const Color(0xFF303030),
                                   ),
                                 ),
-
-                                // Items + dividers
                                 for (int i = 0; i < cart.items.length; i++) ...[
                                   _buildItemRow(cart.items[i]),
-
                                   if (i < cart.items.length - 1)
                                     const Divider(
                                       height: 1,
@@ -615,16 +689,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         color: const Color(0xFF303030),
                       ),
                     ),
-
                     const SizedBox(height: 12),
 
-                    // --- Direct Bank Transfer (web ka default) ---
                     _buildPaymentOption(
                       icon: Icons.account_balance_outlined,
                       title: 'Direct Bank Transfer',
-                      subtitle:
-                          'Pay directly into our bank account — '
-                          'use Order ID as reference',
+                      subtitle: 'Pay directly into our bank account — use Order ID as reference',
                       isSelected: _selectedPayment == 'bank_transfer',
                       onTap: () {
                         setState(() {
@@ -633,7 +703,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       },
                     ),
 
-                    // --- Cash on Delivery ---
                     _buildPaymentOption(
                       icon: Icons.payments_outlined,
                       title: 'Cash on Delivery',
@@ -653,70 +722,47 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             ),
 
             // ================================================================
-            // FIXED BOTTOM — Price Summary + PLACE ORDER
+            // FIXED BOTTOM — Summary + PLACE ORDER (loading ke sath!)
             // ================================================================
             Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(24, 14, 24, 16),
-
               decoration: const BoxDecoration(
                 color: Colors.white,
                 border: Border(top: BorderSide(color: Color(0xFFF0EEEE))),
               ),
-
               child: Column(
                 children: [
-                  // Subtotal
                   _buildPriceRow(
                     'Subtotal (${cart.totalItems} items)',
                     'Rs ${_formatPrice(cart.subtotal)}',
                   ),
-
-                  // Delivery Charges (Rs 2000+ = FREE)
                   _buildPriceRow(
                     'Delivery Charges',
                     cart.deliveryFee == 0
                         ? 'FREE'
                         : 'Rs ${_formatPrice(cart.deliveryFee)}',
                   ),
-
                   const Divider(color: Color(0xFFF0EEEE)),
-
-                  // Total
                   _buildPriceRow(
                     'Total',
                     'Rs ${_formatPrice(cart.totalAmount)}',
                     isTotal: true,
                   ),
-
                   const SizedBox(height: 14),
 
-                  // --- PLACE ORDER BUTTON ---
-                  SizedBox(
-                    width: double.infinity,
+                  // PLACE ORDER — CustomButton (M0 ka button ab kaam aaya!)
+                  CustomButton(
+                    text: _isPlacingOrder ? 'PLACING ORDER...' : 'PLACE ORDER',
+                    isLoading: _isPlacingOrder,
+                    onPressed:
+                        cart.items.isEmpty ||
+                            _addressName.isEmpty ||
+                            _isPlacingOrder
+                        ? null
+                        : _placeOrder,
+                    backgroundColor: const Color(0xFF087524),
                     height: 52,
-
-                    child: ElevatedButton(
-                      onPressed: cart.items.isEmpty ? null : _placeOrder,
-
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF087524),
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: const Color(0xFFD5E2D3),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-
-                      child: Text(
-                        'PLACE ORDER',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
                   ),
                 ],
               ),
@@ -729,21 +775,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 }
 
 // ============================================================================
-// CHANGE ADDRESS SHEET (bottom sheet ka content — alag widget)
-//
-// Alag widget isliye: controllers + keyboard ka lifecycle apne
-// control mein → framework assertion bug (red error) se bachav
+// CHANGE ADDRESS SHEET — complete form (order ke liye saare fields)
 // ============================================================================
 
 class _ChangeAddressSheet extends StatefulWidget {
   final String currentName;
   final String currentPhone;
+  final String currentEmail;
   final String currentAddress;
+  final String currentCity;
+  final String currentState;
+  final String currentPostcode;
 
   const _ChangeAddressSheet({
     required this.currentName,
     required this.currentPhone,
+    required this.currentEmail,
     required this.currentAddress,
+    required this.currentCity,
+    required this.currentState,
+    required this.currentPostcode,
   });
 
   @override
@@ -751,57 +802,67 @@ class _ChangeAddressSheet extends StatefulWidget {
 }
 
 class _ChangeAddressSheetState extends State<_ChangeAddressSheet> {
-  // ==========================================================================
-  // 1. CONTROLLERS (current values se pre-filled)
-  // ==========================================================================
+  static const List<String> _provinces = [
+    'Punjab',
+    'Sindh',
+    'Khyber Pakhtunkhwa',
+    'Balochistan',
+    'Islamabad Capital Territory',
+    'Gilgit-Baltistan',
+    'Azad Jammu & Kashmir',
+  ];
 
   late final TextEditingController _nameController = TextEditingController(
     text: widget.currentName,
   );
-
   late final TextEditingController _phoneController = TextEditingController(
     text: widget.currentPhone,
   );
-
+  late final TextEditingController _emailController = TextEditingController(
+    text: widget.currentEmail,
+  );
   late final TextEditingController _addressController = TextEditingController(
     text: widget.currentAddress,
   );
+  late final TextEditingController _cityController = TextEditingController(
+    text: widget.currentCity,
+  );
+  late final TextEditingController _postcodeController = TextEditingController(
+    text: widget.currentPostcode,
+  );
+
+  late String _selectedProvince = _provinces.contains(widget.currentState)
+      ? widget.currentState
+      : 'Punjab';
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-
-  // ==========================================================================
-  // 2. DISPOSE — controllers cleanup (widget ke saath)
-  // ==========================================================================
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _emailController.dispose();
     _addressController.dispose();
-
+    _cityController.dispose();
+    _postcodeController.dispose();
     super.dispose();
   }
-
-  // ==========================================================================
-  // 3. SAVE — validate → keyboard band → values wapas
-  // ==========================================================================
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
 
-    // Keyboard PEHLE band — race condition se bachav
     FocusScope.of(context).unfocus();
 
     Navigator.pop(context, {
       'name': _nameController.text.trim(),
       'phone': _phoneController.text.trim(),
+      'email': _emailController.text.trim(),
       'address': _addressController.text.trim(),
+      'city': _cityController.text.trim(),
+      'state': _selectedProvince,
+      'postcode': _postcodeController.text.trim(),
     });
   }
-
-  // ==========================================================================
-  // 4. TEXT FIELD
-  // ==========================================================================
 
   Widget _buildField({
     required TextEditingController controller,
@@ -809,36 +870,31 @@ class _ChangeAddressSheetState extends State<_ChangeAddressSheet> {
     required IconData icon,
     required TextInputType keyboardType,
     int maxLines = 1,
-    required String? Function(String?) validator,
+    String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       maxLines: maxLines,
       validator: validator,
-
+      style: GoogleFonts.plusJakartaSans(fontSize: 14),
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF087524)),
-
         filled: true,
         fillColor: const Color(0xFFFCF9F7),
-
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFD5E2D3)),
         ),
-
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFD5E2D3)),
         ),
-
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF087524)),
         ),
-
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFC62828)),
@@ -847,24 +903,16 @@ class _ChangeAddressSheetState extends State<_ChangeAddressSheet> {
     );
   }
 
-  // ==========================================================================
-  // 5. MAIN UI — handle → title → 3 fields → SAVE
-  // ==========================================================================
-
   @override
   Widget build(BuildContext context) {
     return Padding(
-      // Keyboard-aware padding — APNE context se (safe)
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-
       child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-
         child: Form(
           key: _formKey,
-
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -879,18 +927,14 @@ class _ChangeAddressSheetState extends State<_ChangeAddressSheet> {
                   ),
                 ),
               ),
-
               const SizedBox(height: 18),
-
-              // --- Title ---
               Text(
-                'Change Delivery Address',
+                'Delivery Address',
                 style: GoogleFonts.plusJakartaSans(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
               ),
-
               const SizedBox(height: 20),
 
               // --- Full Name ---
@@ -899,14 +943,10 @@ class _ChangeAddressSheetState extends State<_ChangeAddressSheet> {
                 label: 'Full Name',
                 icon: Icons.person_outline,
                 keyboardType: TextInputType.name,
-                validator: (value) {
-                  if (value == null || value.trim().length < 3) {
-                    return 'Please enter a valid name';
-                  }
-                  return null;
-                },
+                validator: (v) => (v == null || v.trim().length < 3)
+                    ? 'Enter a valid name'
+                    : null,
               ),
-
               const SizedBox(height: 14),
 
               // --- Phone ---
@@ -915,41 +955,99 @@ class _ChangeAddressSheetState extends State<_ChangeAddressSheet> {
                 label: 'Phone Number',
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
-                validator: (value) {
-                  if (value == null || value.trim().length < 10) {
-                    return 'Phone must be at least 10 digits';
+                validator: (v) => (v == null || v.trim().length < 10)
+                    ? 'Enter a valid phone number'
+                    : null,
+              ),
+              const SizedBox(height: 14),
+
+              // --- Email (order ke liye zaroori) ---
+              _buildField(
+                controller: _emailController,
+                label: 'Email',
+                icon: Icons.mail_outline,
+                keyboardType: TextInputType.emailAddress,
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'Email is required';
+                  if (!RegExp(r'^[\w\.\-]+@[\w\-]+\.[\w\.]+$')
+                      .hasMatch(v.trim())) {
+                    return 'Enter a valid email';
                   }
                   return null;
                 },
               ),
-
               const SizedBox(height: 14),
 
-              // --- Address (multi-line) ---
+              // --- Address ---
               _buildField(
                 controller: _addressController,
                 label: 'Complete Address',
                 icon: Icons.location_on_outlined,
                 keyboardType: TextInputType.streetAddress,
-                maxLines: 3,
-                validator: (value) {
-                  if (value == null || value.trim().length < 10) {
-                    return 'Please enter complete address';
+                maxLines: 2,
+                validator: (v) => (v == null || v.trim().length < 10)
+                    ? 'Enter complete address'
+                    : null,
+              ),
+              const SizedBox(height: 14),
+
+              // --- City ---
+              _buildField(
+                controller: _cityController,
+                label: 'City',
+                icon: Icons.location_city_outlined,
+                keyboardType: TextInputType.text,
+                validator: (v) =>
+                    (v == null || v.trim().length < 2) ? 'Enter city' : null,
+              ),
+              const SizedBox(height: 14),
+
+              // --- Province dropdown ---
+              DropdownButtonFormField<String>(
+                initialValue: _selectedProvince,
+                decoration: InputDecoration(
+                  labelText: 'Province',
+                  prefixIcon: const Icon(
+                    Icons.map_outlined,
+                    color: Color(0xFF087524),
+                  ),
+                  filled: true,
+                  fillColor: const Color(0xFFFCF9F7),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFD5E2D3)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Color(0xFFD5E2D3)),
+                  ),
+                ),
+                items: _provinces
+                    .map((p) => DropdownMenuItem(value: p, child: Text(p)))
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _selectedProvince = value);
                   }
-                  return null;
                 },
               ),
+              const SizedBox(height: 14),
 
+              // --- Postcode (optional) ---
+              _buildField(
+                controller: _postcodeController,
+                label: 'Postal Code (optional)',
+                icon: Icons.markunread_mailbox_outlined,
+                keyboardType: TextInputType.number,
+              ),
               const SizedBox(height: 24),
 
-              // --- SAVE button ---
+              // --- SAVE ---
               SizedBox(
                 width: double.infinity,
                 height: 52,
-
                 child: ElevatedButton(
                   onPressed: _save,
-
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF087524),
                     foregroundColor: Colors.white,
@@ -958,7 +1056,6 @@ class _ChangeAddressSheetState extends State<_ChangeAddressSheet> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-
                   child: Text(
                     'SAVE ADDRESS',
                     style: GoogleFonts.plusJakartaSans(
