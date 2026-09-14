@@ -51,4 +51,26 @@ class AuthProvider extends ChangeNotifier {
     _user = null;
     notifyListeners();
   }
+
+  /// Signup → account banao → turant LOGIN bhi!
+  /// (user ko dobara login form nahi bharna parta)
+  Future<void> signup({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+    String? phone,
+  }) async {
+    // (1) WordPress par account banao
+    await AuthService.signup(
+      email: email,
+      password: password,
+      firstName: firstName,
+      lastName: lastName,
+      phone: phone,
+    );
+
+    // (2) Turant login — token le lo
+    await login(email, password);
+  }
 }

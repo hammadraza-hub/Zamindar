@@ -5,11 +5,12 @@ import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 
+import '../../config/api_credentials.dart';
 import '../../config/app_config.dart';
 import '../api/api_client.dart';
 
 /// All JWT authentication work in one place:
-/// login, logout, and stored session access.
+/// login, signup, logout, and stored session access.
 class AuthService {
   AuthService._(); // static-only class
 
@@ -49,6 +50,52 @@ class AuthService {
     }
 
     throw _authError(response);
+  }
+
+  // ---------------- SIGNUP (NAYA) ----------------
+
+  /// WordPress par naya CUSTOMER account banata hai
+  /// (WooCommerce REST API + keys se).
+  static Future<void> signup({
+    required String email,
+    required String password,
+    required String firstName,
+    required String lastName,
+    String? phone,
+  }) async {
+    final String basicAuth =
+        'Basic ${base64Encode(utf8.encode('${ApiCredentials.consumerKey}:${ApiCredentials.consumerSecret}'))}';
+
+    http.Response response;
+
+    try {
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.baseUrl}/wp-json/wc/v3/customers'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': basicAuth,
+            },
+            body: jsonEncode({
+              'email': email,
+              'first_name': firstName,
+              'last_name': lastName,
+              'username': email, // login email se hoga (simple)
+              'password': password,
+              'billing': {'phone': phone ?? ''},
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+    } on SocketException {
+      throw ApiException('No internet connection. Please check your network.');
+    } on TimeoutException {
+      throw ApiException('Request timed out. Please try again.');
+    }
+
+    // 201 = Created (success!)
+    if (response.statusCode == 201) return;
+
+    throw _signupError(response);
   }
 
   // ---------------- LOGOUT ----------------
@@ -94,7 +141,7 @@ class AuthService {
     );
   }
 
-  /// WordPress error JSON ko friendly message mein badalta hai.
+  /// Login errors — friendly messages.
   static ApiException _authError(http.Response response) {
     String message = 'Login failed. Please check your credentials.';
 
@@ -108,6 +155,27 @@ class AuthService {
         message = 'Incorrect password. Please try again.';
       } else if (code.contains('invalid_email')) {
         message = 'Invalid email address.';
+      }
+    } catch (_) {}
+
+    return ApiException(message);
+  }
+
+  /// Signup errors — friendly messages.
+  static ApiException _signupError(http.Response response) {
+    String message = 'Could not create account. Please try again.';
+
+    try {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final code = data['code']?.toString() ?? '';
+
+      if (code.contains('email-exists') ||
+          code.contains('registration-error-email-exists')) {
+        message = 'An account with this email already exists. Try logging in.';
+      } else if (response.statusCode == 401 || response.statusCode == 403) {
+        message = 'Server rejected the request (API keys check karen).';
+      } else if (code.contains('invalid-email')) {
+        message = 'Please enter a valid email address.';
       }
     } catch (_) {}
 
