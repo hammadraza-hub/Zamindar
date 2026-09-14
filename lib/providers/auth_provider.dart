@@ -1,0 +1,54 @@
+import 'package:flutter/foundation.dart';
+
+import '../services/auth/auth_service.dart';
+
+/// Tells the whole app whether the user is logged in (and who).
+class AuthProvider extends ChangeNotifier {
+  Map<String, dynamic>? _user;
+  bool _initialized = false;
+
+  Map<String, dynamic>? get user => _user;
+
+  /// Display name — warna email ka pehla hissa.
+  String get userName {
+    final name = _user?['display_name']?.toString() ?? '';
+    if (name.isNotEmpty) return name;
+
+    final email = _user?['email']?.toString() ?? '';
+    if (email.isNotEmpty) return email.split('@').first;
+
+    return 'User';
+  }
+
+  String get userEmail => _user?['email']?.toString() ?? '';
+
+  bool get isLoggedIn => _user != null;
+  bool get isInitialized => _initialized;
+
+  /// App start par saved session load karta hai.
+  Future<void> loadSession() async {
+    _user = await AuthService.getStoredUser();
+    _initialized = true;
+    notifyListeners();
+  }
+
+  /// JWT login — success par user set ho jata hai.
+  Future<void> login(String username, String password) async {
+    final data = await AuthService.login(username, password);
+
+    _user = {
+      'display_name': data['user_display_name']?.toString() ?? '',
+      'email': data['user_email']?.toString() ?? '',
+      'username': data['user_nicename']?.toString() ?? '',
+    };
+
+    notifyListeners();
+  }
+
+  /// Logout — session delete, guest mode.
+  Future<void> logout() async {
+    await AuthService.logout();
+    _user = null;
+    notifyListeners();
+  }
+}

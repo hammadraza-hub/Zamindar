@@ -6,12 +6,14 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../models/product.dart';
+import '../providers/auth_provider.dart';
 import '../repositories/product_repository.dart';
 import '../services/cart_provider.dart';
 import 'account_screen.dart';
 import 'categories_screen.dart';
 import 'search_screen.dart';
 import 'product_detail_screen.dart';
+import 'login_screen.dart';
 
 // ============================================================================
 // HOME SCREEN
@@ -378,6 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
   // ==========================================================================
   // 11. BRAND CHIP
   // ==========================================================================
@@ -637,13 +640,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const SizedBox(width: 14),
 
-                  // Profile Button → Account Screen
+                  // Profile Button — SMART
+                  // Guest → Login Screen | Logged-in → Account Screen
                   InkWell(
                     onTap: () {
+                      final bool isLoggedIn = context
+                          .read<AuthProvider>()
+                          .isLoggedIn;
+
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const AccountScreen(),
+                          builder: (_) => isLoggedIn
+                              ? const AccountScreen()
+                              : const LoginScreen(),
                         ),
                       );
                     },

@@ -4,25 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../providers/auth_provider.dart';
 import 'edit_profile_screen.dart';
+import 'login_screen.dart';
 import 'policy_screen.dart';
 import 'help_support_screen.dart';
 
 // ============================================================================
-// ACCOUNT SCREEN (MY ACCOUNT)
+// ACCOUNT SCREEN (MY ACCOUNT) — LOGIN AWARE
 //
-// Structure:
-//   [Header] → [Profile Card: Avatar + Name + Phone + Edit + Stats]
-//   → [Menu Items] → [Logout] → [Version + Tagline]
+// Logged-in:  ASLI naam + email (website se) + LOGOUT
+// Guest:      "Guest" + LOGIN button
 //
-// PROFILE PHOTO:
-//   - Avatar par camera badge → Gallery/Camera se photo
-//   - Photo LAGI hai    → photo dikhti hai
-//   - Photo NAHI lagayi → name ke initials (fallback)
-//   - Photo permanently save (documents folder + SharedPreferences)
-//     — app restart ke baad bhi rehti hai
+// Profile photo wala system same hai (local storage) —
+// bas naam/abhaar ab AuthProvider se aate hain.
 // ============================================================================
 
 class AccountScreen extends StatefulWidget {
@@ -34,22 +32,16 @@ class AccountScreen extends StatefulWidget {
 
 class _AccountScreenState extends State<AccountScreen> {
   // ==========================================================================
-  // 1. USER DATA
+  // 1. LOCAL DATA (sirf photo — naam/abhaar ab AuthProvider se)
   // ==========================================================================
 
-  String _userName = 'Ahmed Raza';
-  String _userPhone = '+92 300 1234567';
+  final String _ordersCount = '0';
+  final String _userRating = '—';
+  final String _memberSince = '—';
 
-  final String _ordersCount = '12';
-  final String _userRating = '4.8';
-  final String _memberSince = '2 yrs';
-
-  /// User ki profile photo
-  /// null  → photo nahi lagayi (initials dikhenge)
-  /// value → File (user ki photo)
+  /// User ki profile photo (local feature — same as before)
   File? _profileImage;
 
-  /// App start par saved photo load karo
   @override
   void initState() {
     super.initState();
@@ -58,13 +50,13 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   /// "Ahmed Raza" → "AR" (avatar initials)
-  String _userInitials() {
-    final parts = _userName.trim().split(' ');
+  String _userInitials(String name) {
+    final parts = name.trim().split(' ');
 
     String initials = '';
 
     for (final p in parts) {
-      if (p.isNotEmpty) initials += p[0];
+      if (p.isNotEmpty && initials.length < 2) initials += p[0];
     }
 
     return initials.toUpperCase();
@@ -90,17 +82,15 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   // ==========================================================================
-  // 3. PROFILE PHOTO — Load / Pick / Remove
+  // 3. PROFILE PHOTO — Load / Pick / Remove (same as before)
   // ==========================================================================
 
-  /// LOAD — app start par saved photo ka path dhoondo
   Future<void> _loadProfileImage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
 
       final String? path = prefs.getString('profile_image');
 
-      // Path save hai AUR file sach mein exist karti hai
       if (path != null && File(path).existsSync()) {
         if (mounted) {
           setState(() {
@@ -109,29 +99,22 @@ class _AccountScreenState extends State<AccountScreen> {
         }
       }
     } catch (_) {
-      // Load fail → initials use honge (koi error nahi)
+      // Load fail → initials use honge
     }
   }
 
-  /// PICK — Gallery/Camera se photo lo + permanently save karo
   Future<void> _pickImage(ImageSource source) async {
     try {
       final picker = ImagePicker();
 
       final XFile? picked = await picker.pickImage(
         source: source,
-
-        // Photo chhoti rakho (performance ke liye)
         maxWidth: 600,
         imageQuality: 85,
       );
 
-      // User ne cancel kiya → kuch nahi karna
       if (picked == null) return;
 
-      // ---- (1) Temp file ko app ke documents folder mein COPY ----
-      // (Temp file OS khud delete kar sakta hai — isliye
-      //  permanent jagah copy karte hain)
       final appDir = await getApplicationDocumentsDirectory();
 
       final String fileName =
@@ -140,11 +123,9 @@ class _AccountScreenState extends State<AccountScreen> {
       final File saved = await File(picked.path)
           .copy('${appDir.path}/$fileName');
 
-      // ---- (2) Path save karo (restart ke baad bhi yaad rahe) ----
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('profile_image', saved.path);
 
-      // ---- (3) UI update ----
       if (mounted) {
         setState(() {
           _profileImage = saved;
@@ -157,7 +138,6 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
-  /// REMOVE — photo hatao, wapas initials
   Future<void> _removeImage() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -172,7 +152,6 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
-  /// OPTIONS SHEET — Gallery / Camera / Remove
   void _showImageOptions() {
     showModalBottomSheet(
       context: context,
@@ -187,7 +166,6 @@ class _AccountScreenState extends State<AccountScreen> {
             children: [
               const SizedBox(height: 12),
 
-              // Drag handle
               Center(
                 child: Container(
                   width: 45,
@@ -201,7 +179,6 @@ class _AccountScreenState extends State<AccountScreen> {
 
               const SizedBox(height: 16),
 
-              // Title
               Text(
                 'Profile Photo',
                 style: GoogleFonts.plusJakartaSans(
@@ -212,7 +189,6 @@ class _AccountScreenState extends State<AccountScreen> {
 
               const SizedBox(height: 8),
 
-              // ---- Gallery ----
               ListTile(
                 leading: const Icon(
                   Icons.photo_library_outlined,
@@ -228,7 +204,6 @@ class _AccountScreenState extends State<AccountScreen> {
                 },
               ),
 
-              // ---- Camera ----
               ListTile(
                 leading: const Icon(
                   Icons.camera_alt_outlined,
@@ -244,7 +219,6 @@ class _AccountScreenState extends State<AccountScreen> {
                 },
               ),
 
-              // ---- Remove (sirf jab photo lagi ho) ----
               if (_profileImage != null)
                 ListTile(
                   leading: const Icon(
@@ -270,45 +244,98 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   // ==========================================================================
-  // 4. EDIT PROFILE (name/phone) — text wala edit
+  // 4. AUTH ACTIONS — Login / Edit / Logout
   // ==========================================================================
 
-  Future<void> _editProfile() async {
+  void _openLogin() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
+  }
+
+  /// EDIT PROFILE — sirf logged-in users ke liye.
+  /// (Guest ke liye pehle login.)
+  Future<void> _editProfile(String currentName, String currentPhone) async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            EditProfileScreen(currentName: _userName, currentPhone: _userPhone),
+        builder: (_) => EditProfileScreen(
+          currentName: currentName,
+          currentPhone: currentPhone,
+        ),
       ),
     );
 
     if (result != null) {
-      setState(() {
-        _userName = result['name'] as String;
-        _userPhone = result['phone'] as String;
-      });
+      // NOTE: Ye abhi local edit hai — website par naam update
+      // kaam M8 (Account Sync) mein karenge.
+      _showMessage('Profile updated (local)');
+    }
+  }
 
-      _showMessage('Profile updated');
+  /// LOGOUT — confirm dialog ke sath ASLI logout.
+  Future<void> _confirmLogout() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          title: Text(
+            'Logout?',
+            style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600),
+          ),
+          content: Text(
+            'You will need to login again to see your orders.',
+            style: GoogleFonts.plusJakartaSans(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(
+                'Cancel',
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFF666666),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(
+                'Logout',
+                style: GoogleFonts.plusJakartaSans(
+                  color: const Color(0xFFC62828),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed == true && mounted) {
+      await context.read<AuthProvider>().logout();
+
+      if (mounted) {
+        _showMessage('Logged out');
+      }
     }
   }
 
   // ==========================================================================
-  // 5. AVATAR WIDGET
-  //
-  // Photo lagi hai   → photo (ClipOval)
-  // Photo nahi lagayi → name ke initials (fallback)
-  // Camera badge      → tap = options sheet
+  // 5. AVATAR WIDGET (photo ya initials)
   // ==========================================================================
 
-  Widget _buildAvatar() {
+  Widget _buildAvatar(String name) {
     return InkWell(
-      // Poora avatar tappable — photo lagane ke options
       onTap: _showImageOptions,
       borderRadius: BorderRadius.circular(50),
 
       child: Stack(
         children: [
-          // ---- Main circle: photo ya initials ----
           Container(
             width: 64,
             height: 64,
@@ -329,7 +356,7 @@ class _AccountScreenState extends State<AccountScreen> {
                     ),
                   )
                 : Text(
-                    _userInitials(),
+                    _userInitials(name),
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 20,
                       fontWeight: FontWeight.w600,
@@ -338,7 +365,6 @@ class _AccountScreenState extends State<AccountScreen> {
                   ),
           ),
 
-          // ---- Camera badge (bottom-right corner) ----
           Positioned(
             bottom: 0,
             right: 0,
@@ -368,7 +394,7 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   // ==========================================================================
-  // 6. STATS ITEM (Orders / Rating / Member)
+  // 6. STATS ITEM
   // ==========================================================================
 
   Widget _buildStatItem({
@@ -470,6 +496,15 @@ class _AccountScreenState extends State<AccountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ---- AUTH STATE (poori app se shared) ----
+    final auth = context.watch<AuthProvider>();
+
+    final bool isLoggedIn = auth.isLoggedIn;
+    final String displayName = isLoggedIn ? auth.userName : 'Guest';
+    final String displayInfo = isLoggedIn
+        ? auth.userEmail
+        : 'Login to access your orders & profile';
+
     return Scaffold(
       backgroundColor: const Color(0xFFFCF9F7),
 
@@ -482,7 +517,7 @@ class _AccountScreenState extends State<AccountScreen> {
               const SizedBox(height: 12),
 
               // ================================================================
-              // HEADER — Back + Title (tab mode mein back nahi)
+              // HEADER
               // ================================================================
               Row(
                 children: [
@@ -516,7 +551,7 @@ class _AccountScreenState extends State<AccountScreen> {
               const SizedBox(height: 24),
 
               // ================================================================
-              // PROFILE CARD
+              // PROFILE CARD — ASLI DATA (ya Guest)
               // ================================================================
               Container(
                 width: double.infinity,
@@ -536,21 +571,20 @@ class _AccountScreenState extends State<AccountScreen> {
 
                 child: Column(
                   children: [
-                    // ---- Avatar (photo/initials) + Name + Edit ----
                     Row(
                       children: [
-                        // AVATAR — tap karke photo lagao
-                        _buildAvatar(),
+                        // AVATAR
+                        _buildAvatar(displayName),
 
                         const SizedBox(width: 16),
 
-                        // Name + Phone
+                        // Name + Email/Info
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                _userName,
+                                displayName,
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
@@ -561,7 +595,9 @@ class _AccountScreenState extends State<AccountScreen> {
                               const SizedBox(height: 4),
 
                               Text(
-                                _userPhone,
+                                displayInfo,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 13,
                                   color: const Color(0xFF777777),
@@ -571,27 +607,54 @@ class _AccountScreenState extends State<AccountScreen> {
                           ),
                         ),
 
-                        // EDIT (pencil) — name/phone wala edit
-                        InkWell(
-                          onTap: _editProfile,
-                          borderRadius: BorderRadius.circular(50),
+                        // ---- Guest: LOGIN button | Logged-in: EDIT ----
+                        isLoggedIn
+                            ? InkWell(
+                                onTap: () =>
+                                    _editProfile(displayName, auth.userEmail),
+                                borderRadius: BorderRadius.circular(50),
 
-                          child: Container(
-                            width: 38,
-                            height: 38,
+                                child: Container(
+                                  width: 38,
+                                  height: 38,
 
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFDCE8DA),
-                              shape: BoxShape.circle,
-                            ),
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFDCE8DA),
+                                    shape: BoxShape.circle,
+                                  ),
 
-                            child: const Icon(
-                              Icons.edit,
-                              size: 18,
-                              color: Color(0xFF087524),
-                            ),
-                          ),
-                        ),
+                                  child: const Icon(
+                                    Icons.edit,
+                                    size: 18,
+                                    color: Color(0xFF087524),
+                                  ),
+                                ),
+                              )
+                            : InkWell(
+                                onTap: _openLogin,
+                                borderRadius: BorderRadius.circular(50),
+
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 8,
+                                  ),
+
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF087524),
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+
+                                  child: Text(
+                                    'LOGIN',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ),
                       ],
                     ),
 
@@ -636,7 +699,11 @@ class _AccountScreenState extends State<AccountScreen> {
                 icon: Icons.receipt_long_outlined,
                 title: 'My Orders',
                 onTap: () {
-                  _showMessage('My Orders — coming soon');
+                  _showMessage(
+                    isLoggedIn
+                        ? 'My Orders — coming soon (M7)'
+                        : 'Login to see your orders',
+                  );
                 },
               ),
 
@@ -651,7 +718,7 @@ class _AccountScreenState extends State<AccountScreen> {
               _buildMenuItem(
                 icon: Icons.person_outline,
                 title: 'Edit Profile',
-                onTap: _editProfile,
+                onTap: () => _editProfile(displayName, auth.userEmail),
               ),
 
               _buildMenuItem(
@@ -670,7 +737,6 @@ class _AccountScreenState extends State<AccountScreen> {
                 },
               ),
 
-              // Help & Support → real screen
               _buildMenuItem(
                 icon: Icons.help_outline,
                 title: 'Help & Support',
@@ -691,7 +757,7 @@ class _AccountScreenState extends State<AccountScreen> {
                   _showMessage('Settings — coming soon');
                 },
               ),
-              // Privacy Policy & Terms
+
               _buildMenuItem(
                 icon: Icons.privacy_tip_outlined,
                 title: 'Privacy Policy & Terms',
@@ -706,42 +772,70 @@ class _AccountScreenState extends State<AccountScreen> {
               const SizedBox(height: 16),
 
               // ================================================================
-              // LOGOUT BUTTON
+              // LOGIN / LOGOUT — state ke mutabiq
               // ================================================================
               SizedBox(
                 width: double.infinity,
                 height: 52,
 
-                child: OutlinedButton(
-                  onPressed: () {
-                    _showMessage('Logout clicked');
-                  },
+                child: isLoggedIn
+                    ? OutlinedButton(
+                        onPressed: _confirmLogout,
 
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFC62828),
-                    side: const BorderSide(color: Color(0xFFC62828)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFC62828),
+                          side: const BorderSide(color: Color(0xFFC62828)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
 
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.logout, size: 20),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.logout, size: 20),
 
-                      const SizedBox(width: 10),
+                            const SizedBox(width: 10),
 
-                      Text(
-                        'Logout',
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                            Text(
+                              'Logout',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : ElevatedButton(
+                        onPressed: _openLogin,
+
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF087524),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.login, size: 20),
+
+                            const SizedBox(width: 10),
+
+                            Text(
+                              'Login to Your Account',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ],
-                  ),
-                ),
               ),
 
               const SizedBox(height: 24),
@@ -761,7 +855,6 @@ class _AccountScreenState extends State<AccountScreen> {
 
               const SizedBox(height: 6),
 
-              // Privacy/Terms → Policy Screen
               InkWell(
                 onTap: () {
                   Navigator.push(
