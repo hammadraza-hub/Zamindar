@@ -10,9 +10,10 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? get user => _user;
 
   /// Display name — warna email ka pehla hissa.
+  /// (Naam mein email na aaye!)
   String get userName {
     final name = _user?['display_name']?.toString() ?? '';
-    if (name.isNotEmpty) return name;
+    if (name.isNotEmpty && !name.contains('@')) return name;
 
     final email = _user?['email']?.toString() ?? '';
     if (email.isNotEmpty) return email.split('@').first;
@@ -36,11 +37,17 @@ class AuthProvider extends ChangeNotifier {
   Future<void> login(String username, String password) async {
     final data = await AuthService.login(username, password);
 
-    _user = {
-      'display_name': data['user_display_name']?.toString() ?? '',
-      'email': data['user_email']?.toString() ?? '',
-      'username': data['user_nicename']?.toString() ?? '',
-    };
+    // AuthService ne display name pehle hi theek kar ke
+    // saveSession mein likha hai — wahi dobara parho
+    final stored = await AuthService.getStoredUser();
+
+    _user =
+        stored ??
+        {
+          'display_name': data['user_display_name']?.toString() ?? '',
+          'email': data['user_email']?.toString() ?? '',
+          'username': data['user_nicename']?.toString() ?? '',
+        };
 
     notifyListeners();
   }

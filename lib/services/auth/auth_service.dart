@@ -111,6 +111,30 @@ class AuthService {
     return _storage.read(key: _tokenKey);
   }
 
+  /// JWT token se user ka POORA profile lata hai
+  /// (first_name/last_name — display ke liye asli naam).
+  static Future<Map<String, dynamic>?> fetchUserProfile() async {
+    final token = await getToken();
+    if (token == null) return null;
+
+    try {
+      final response = await http
+          .get(
+            Uri.parse(
+              '${AppConfig.baseUrl}/wp-json/wp/v2/users/me?context=edit',
+            ),
+            headers: {'Authorization': 'Bearer $token'},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   static Future<Map<String, dynamic>?> getStoredUser() async {
     final raw = await _storage.read(key: _userKey);
     if (raw == null || raw.isEmpty) return null;
@@ -122,7 +146,6 @@ class AuthService {
   }
 
   // ---------------- HELPERS ----------------
-
   static Future<void> _saveSession(Map<String, dynamic> data) async {
     final token = data['token']?.toString();
     if (token == null || token.isEmpty) {
@@ -131,10 +154,26 @@ class AuthService {
 
     await _storage.write(key: _tokenKey, value: token);
 
+    // ---- Display name theek karo (email ki jagah ASLI naam) ----
+    String displayName = data['user_display_name']?.toString() ?? '';
+
+    // Display name email jaisa hai (ya khali) → poora profile mangwao
+    if (displayName.isEmpty ||
+        displayName.contains('@') ||
+        displayName == data['user_email']?.toString().split('@').first) {
+      final profile = await fetchUserProfile();
+
+      final first = profile?['first_name']?.toString() ?? '';
+      final last = profile?['last_name']?.toString() ?? '';
+
+      final fullName = '$first $last'.trim();
+      if (fullName.isNotEmpty) displayName = fullName;
+    }
+
     await _storage.write(
       key: _userKey,
       value: jsonEncode({
-        'display_name': data['user_display_name']?.toString() ?? '',
+        'display_name': displayName,
         'email': data['user_email']?.toString() ?? '',
         'username': data['user_nicename']?.toString() ?? '',
       }),
