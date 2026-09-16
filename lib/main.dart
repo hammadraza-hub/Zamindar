@@ -7,6 +7,7 @@ import 'providers/auth_provider.dart';
 import 'screens/main_navigation_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'services/cart_provider.dart';
+import 'providers/account_stats_provider.dart';
 
 Future<void> main() async {
   // SharedPreferences async hai — ye zaroori hai
@@ -29,6 +30,7 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (_) => authProvider),
         ChangeNotifierProvider(create: (_) => cartProvider),
+        ChangeNotifierProvider(create: (_) => AccountStatsProvider()),
       ],
       // showOnboarding YAHAN pass ho raha hai! ⬇️
       child: MyApp(showOnboarding: !onboardingDone),

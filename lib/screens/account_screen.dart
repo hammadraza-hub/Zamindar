@@ -14,6 +14,8 @@ import 'login_screen.dart';
 import 'policy_screen.dart';
 import 'help_support_screen.dart';
 
+import '../providers/account_stats_provider.dart';
+
 // ============================================================================
 // ACCOUNT SCREEN (MY ACCOUNT) — LOGIN AWARE
 //
@@ -36,10 +38,6 @@ class _AccountScreenState extends State<AccountScreen> {
   // 1. LOCAL DATA (sirf photo — naam/abhaar ab AuthProvider se)
   // ==========================================================================
 
-  final String _ordersCount = '0';
-  final String _userRating = '—';
-  final String _memberSince = '—';
-
   /// User ki profile photo (local feature — same as before)
   File? _profileImage;
 
@@ -48,6 +46,13 @@ class _AccountScreenState extends State<AccountScreen> {
     super.initState();
 
     _loadProfileImage();
+
+    // Logged-in ho to orders count load karo
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (context.read<AuthProvider>().isLoggedIn) {
+        context.read<AccountStatsProvider>().loadStats();
+      }
+    });
   }
 
   /// "Ahmed Raza" → "AR" (avatar initials)
@@ -320,9 +325,10 @@ class _AccountScreenState extends State<AccountScreen> {
     if (confirmed == true && mounted) {
       await context.read<AuthProvider>().logout();
 
-      if (mounted) {
-        _showMessage('Logged out');
-      }
+      if (!mounted) return;
+
+      context.read<AccountStatsProvider>().reset();
+      _showMessage('Logged out');
     }
   }
 
@@ -665,27 +671,35 @@ class _AccountScreenState extends State<AccountScreen> {
 
                     const SizedBox(height: 16),
 
-                    // ---- Stats Row ----
-                    Row(
-                      children: [
-                        _buildStatItem(
-                          icon: Icons.shopping_bag_outlined,
-                          value: _ordersCount,
-                          label: 'Orders',
-                        ),
+                    // ---- Stats Row (LIVE data!) ----
+                    Builder(
+                      builder: (context) {
+                        final stats = context.watch<AccountStatsProvider>();
 
-                        _buildStatItem(
-                          icon: Icons.star_rounded,
-                          value: _userRating,
-                          label: 'Rating',
-                        ),
+                        return Row(
+                          children: [
+                            _buildStatItem(
+                              icon: Icons.shopping_bag_outlined,
+                              value: '${stats.ordersCount}',
+                              label: 'Orders',
+                            ),
 
-                        _buildStatItem(
-                          icon: Icons.verified_outlined,
-                          value: _memberSince,
-                          label: 'Member',
-                        ),
-                      ],
+                            _buildStatItem(
+                              icon: Icons.star_rounded,
+                              value: isLoggedIn
+                                  ? (stats.isLoading ? '...' : '✓')
+                                  : '—',
+                              label: 'Verified',
+                            ),
+
+                            _buildStatItem(
+                              icon: Icons.verified_outlined,
+                              value: isLoggedIn ? 'Active' : 'Guest',
+                              label: 'Status',
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
