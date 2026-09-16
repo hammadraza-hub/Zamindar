@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'orders_screen.dart';
 import '../providers/auth_provider.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
@@ -699,10 +700,9 @@ class _AccountScreenState extends State<AccountScreen> {
                 icon: Icons.receipt_long_outlined,
                 title: 'My Orders',
                 onTap: () {
-                  _showMessage(
-                    isLoggedIn
-                        ? 'My Orders — coming soon (M7)'
-                        : 'Login to see your orders',
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const OrdersScreen()),
                   );
                 },
               ),

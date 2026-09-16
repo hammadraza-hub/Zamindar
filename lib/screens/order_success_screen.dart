@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../services/cart_provider.dart';
 import 'main_navigation_screen.dart';
+import 'order_detail_screen.dart';
 
 // ============================================================================
 // ORDER SUCCESS SCREEN
@@ -481,7 +482,23 @@ class _OrderSuccessScreenState extends State<OrderSuccessScreen> {
                   width: double.infinity,
                   child: OutlinedButton(
                     onPressed: () {
-                      _showMessage('Order tracking coming soon');
+                      // ASLI order ID hai to detail screen kholo!
+                      if (widget.realOrderNumber != null) {
+                        final id = int.tryParse(widget.realOrderNumber!);
+
+                        if (id != null && id > 0) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => OrderDetailScreen(orderId: id),
+                            ),
+                          );
+
+                          return;
+                        }
+                      }
+
+                      _showMessage('Order tracking not available');
                     },
 
                     style: OutlinedButton.styleFrom(
