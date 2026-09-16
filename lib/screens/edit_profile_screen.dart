@@ -1,22 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/auth_provider.dart';
+import '../widgets/custom_button.dart';
 
 // ============================================================================
-// EDIT PROFILE SCREEN
+// EDIT PROFILE SCREEN — WEBSITE SYNC!
 //
-// User apna naam aur phone number change karta hai:
-//   - Fields current values se pre-filled hoti hain
-//   - DP (initials) typing ke saath LIVE update hota hai
-//   - SAVE → nayi values AccountScreen ko mil jaati hain
-//     (Navigator.pop ke result ke saath)
-//   - BACK → koi change nahi hota
+// SAVE dabane par:
+//   1. WordPress par naam update (API call)
+//   2. AuthProvider update (app mein turant naya naam)
+//   3. Phone local display ke liye wapas
+//
+// Fail ho to kuch nahi badalta (data mismatch se bachav!)
 // ============================================================================
 
 class EditProfileScreen extends StatefulWidget {
-  /// Account screen ki current name
   final String currentName;
-
-  /// Account screen ka current phone
   final String currentPhone;
 
   const EditProfileScreen({
@@ -31,7 +32,7 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   // ==========================================================================
-  // 1. CONTROLLERS (current values se pre-filled)
+  // 1. CONTROLLERS
   // ==========================================================================
 
   late final TextEditingController _nameController = TextEditingController(
@@ -42,19 +43,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     text: widget.currentPhone,
   );
 
-  /// Form validation ke liye
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  bool _isSaving = false;
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
-
     super.dispose();
   }
 
   // ==========================================================================
-  // 2. HELPER — "Ahmed Raza" → "AR"
+  // 2. HELPERS
   // ==========================================================================
 
   String _initialsFrom(String name) {
@@ -63,27 +63,60 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     String initials = '';
 
     for (final p in parts) {
-      if (p.isNotEmpty) initials += p[0];
+      if (p.isNotEmpty && initials.length < 2) initials += p[0];
     }
 
     return initials.toUpperCase();
   }
 
+  void _showMessage(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: GoogleFonts.plusJakartaSans(color: Colors.white),
+        ),
+        duration: const Duration(seconds: 2),
+        backgroundColor: isError
+            ? const Color(0xFFC62828)
+            : const Color(0xFF087524),
+      ),
+    );
+  }
+
   // ==========================================================================
-  // 3. SAVE
-  //
-  // Validate → nayi values result ke tor par wapas bhejo
+  // 3. SAVE — WEBSITE + APP dono update!
   // ==========================================================================
 
-  void _save() {
-    // Validation fail → error messages dikhao
+  Future<void> _save() async {
+    if (_isSaving) return;
+
     if (!_formKey.currentState!.validate()) return;
+
+    // Keyboard band
+    FocusScope.of(context).unfocus();
+
+    setState(() => _isSaving = true);
 
     final String newName = _nameController.text.trim();
     final String newPhone = _phoneController.text.trim();
 
-    // Ye result AccountScreen receive karega
-    Navigator.pop(context, {'name': newName, 'phone': newPhone});
+    try {
+      // ---- (1) WEBSITE par naam update ----
+      await context.read<AuthProvider>().updateDisplayName(newName);
+
+      if (!mounted) return;
+
+      // ---- (2) Phone local display ke liye (account screen ko) ----
+      Navigator.pop(context, {'name': newName, 'phone': newPhone});
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isSaving = false);
+      _showMessage(e.toString(), isError: true);
+    }
   }
 
   // ==========================================================================
@@ -101,29 +134,24 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       controller: controller,
       keyboardType: keyboardType,
       validator: validator,
-
+      style: GoogleFonts.plusJakartaSans(fontSize: 15),
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF087524)),
-
         filled: true,
         fillColor: Colors.white,
-
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFD5E2D3)),
         ),
-
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFD5E2D3)),
         ),
-
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFF087524)),
         ),
-
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Color(0xFFC62828)),
@@ -134,9 +162,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // ==========================================================================
   // 5. MAIN UI
-  //
-  // Structure: [Header] → [Live DP Preview] → [Name Field] →
-  //             [Phone Field] → [SAVE BUTTON]
   // ==========================================================================
 
   @override
@@ -148,7 +173,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
 
-          // Form — validation handle karta hai
           child: Form(
             key: _formKey,
 
@@ -157,12 +181,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               children: [
                 const SizedBox(height: 12),
 
-                // ==============================================================
-                // HEADER — Back + Title
-                // ==============================================================
+                // ---- Header ----
                 Row(
                   children: [
-                    // Back = cancel (koi change nahi hoga)
                     InkWell(
                       onTap: () => Navigator.pop(context),
                       borderRadius: BorderRadius.circular(30),
@@ -191,12 +212,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                 const SizedBox(height: 28),
 
-                // ==============================================================
-                // LIVE DP PREVIEW
-                //
-                // ValueListenableBuilder: naam type karne par
-                // initials foran badal jate hain
-                // ==============================================================
+                // ---- Live DP preview ----
                 Center(
                   child: ValueListenableBuilder<TextEditingValue>(
                     valueListenable: _nameController,
@@ -216,7 +232,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           value.text.trim().isEmpty
                               ? '?'
                               : _initialsFrom(value.text),
-
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 28,
                             fontWeight: FontWeight.w600,
@@ -232,7 +247,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                 Center(
                   child: Text(
-                    'Edit your profile',
+                    'Changes will sync to your account',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11,
                       color: const Color(0xFF999999),
@@ -242,15 +257,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                 const SizedBox(height: 28),
 
-                // ==============================================================
-                // FULL NAME FIELD
-                // ==============================================================
+                // ---- Full Name ----
                 _buildTextField(
                   controller: _nameController,
                   label: 'Full Name',
                   icon: Icons.person_outline,
                   keyboardType: TextInputType.name,
-
                   validator: (value) {
                     if (value == null || value.trim().length < 3) {
                       return 'Please enter a valid name (min 3 characters)';
@@ -261,15 +273,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                 const SizedBox(height: 16),
 
-                // ==============================================================
-                // PHONE NUMBER FIELD
-                // ==============================================================
+                // ---- Phone ----
                 _buildTextField(
                   controller: _phoneController,
                   label: 'Phone Number',
                   icon: Icons.phone_outlined,
                   keyboardType: TextInputType.phone,
-
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter phone number';
@@ -283,33 +292,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
                 const SizedBox(height: 32),
 
-                // ==============================================================
-                // SAVE BUTTON
-                // ==============================================================
-                SizedBox(
-                  width: double.infinity,
+                // ---- SAVE (CustomButton — loading built-in!) ----
+                CustomButton(
+                  text: 'SAVE CHANGES',
+                  isLoading: _isSaving,
+                  onPressed: _save,
+                  backgroundColor: const Color(0xFF087524),
                   height: 52,
-
-                  child: ElevatedButton(
-                    onPressed: _save,
-
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF087524),
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-
-                    child: Text(
-                      'SAVE CHANGES',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
                 ),
 
                 const SizedBox(height: 24),

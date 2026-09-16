@@ -52,6 +52,16 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Profile naam update — website + local dono.
+  Future<void> updateDisplayName(String displayName) async {
+    // (1) Website par update
+    await AuthService.updateDisplayName(displayName);
+
+    // (2) App state update (turant sab jagah naya naam!)
+    _user?['display_name'] = displayName.trim();
+    notifyListeners();
+  }
+
   /// Logout — session delete, guest mode.
   Future<void> logout() async {
     await AuthService.logout();

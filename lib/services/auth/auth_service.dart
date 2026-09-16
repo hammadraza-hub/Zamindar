@@ -97,6 +97,57 @@ class AuthService {
 
     throw _signupError(response);
   }
+  // ---------------- UPDATE PROFILE (NAYA) ----------------
+
+  /// WordPress par user ka naam update karta hai.
+  /// (JWT token se — sirf apna hi account change ho sakta hai!)
+  static Future<void> updateDisplayName(String displayName) async {
+    final token = await getToken();
+    if (token == null) {
+      throw const ApiException('Not logged in. Please login again.');
+    }
+
+    // Naam ko first/last mein todein
+    final parts = displayName.trim().split(RegExp(r'\s+'));
+    final firstName = parts.isNotEmpty ? parts.first : '';
+    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+    http.Response response;
+
+    try {
+      response = await http
+          .post(
+            Uri.parse(
+              '${AppConfig.baseUrl}/wp-json/wp/v2/users/me?context=edit',
+            ),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'first_name': firstName,
+              'last_name': lastName,
+              'name': displayName.trim(),
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+    } on SocketException {
+      throw ApiException('No internet connection. Please check your network.');
+    } on TimeoutException {
+      throw ApiException('Request timed out. Please try again.');
+    }
+
+    if (response.statusCode != 200) {
+      throw ApiException('Could not update profile (${response.statusCode})');
+    }
+
+    // ---- Local stored session bhi update karo ----
+    final user = await getStoredUser();
+    if (user != null) {
+      user['display_name'] = displayName.trim();
+      await _storage.write(key: _userKey, value: jsonEncode(user));
+    }
+  }
 
   // ---------------- LOGOUT ----------------
 

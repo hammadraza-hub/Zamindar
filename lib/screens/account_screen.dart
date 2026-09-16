@@ -859,7 +859,7 @@ class _AccountScreenState extends State<AccountScreen> {
               // ================================================================
               Center(
                 child: Text(
-                  'App Version 2.4.0',
+                  'App Version 1.0.0',
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 11,
                     color: const Color(0xFF999999),
