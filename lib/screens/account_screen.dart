@@ -12,7 +12,8 @@ import '../providers/auth_provider.dart';
 import 'edit_profile_screen.dart';
 import 'login_screen.dart';
 import 'policy_screen.dart';
-import 'help_support_screen.dart';
+import 'settings_screen.dart';
+import 'payment_methods_screen.dart';
 
 import '../providers/account_stats_provider.dart';
 
@@ -21,9 +22,6 @@ import '../providers/account_stats_provider.dart';
 //
 // Logged-in:  ASLI naam + email (website se) + LOGOUT
 // Guest:      "Guest" + LOGIN button
-//
-// Profile photo wala system same hai (local storage) —
-// bas naam/abhaar ab AuthProvider se aate hain.
 // ============================================================================
 
 class AccountScreen extends StatefulWidget {
@@ -38,7 +36,6 @@ class _AccountScreenState extends State<AccountScreen> {
   // 1. LOCAL DATA (sirf photo — naam/abhaar ab AuthProvider se)
   // ==========================================================================
 
-  /// User ki profile photo (local feature — same as before)
   File? _profileImage;
 
   @override
@@ -88,7 +85,7 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   // ==========================================================================
-  // 3. PROFILE PHOTO — Load / Pick / Remove (same as before)
+  // 3. PROFILE PHOTO — Load / Pick / Remove
   // ==========================================================================
 
   Future<void> _loadProfileImage() async {
@@ -260,8 +257,6 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  /// EDIT PROFILE — sirf logged-in users ke liye.
-  /// (Guest ke liye pehle login.)
   Future<void> _editProfile(String currentName, String currentPhone) async {
     final result = await Navigator.push<Map<String, dynamic>>(
       context,
@@ -274,9 +269,7 @@ class _AccountScreenState extends State<AccountScreen> {
     );
 
     if (result != null) {
-      // NOTE: Ye abhi local edit hai — website par naam update
-      // kaam M8 (Account Sync) mein karenge.
-      _showMessage('Profile updated (local)');
+      _showMessage('Profile updated');
     }
   }
 
@@ -558,7 +551,7 @@ class _AccountScreenState extends State<AccountScreen> {
               const SizedBox(height: 24),
 
               // ================================================================
-              // PROFILE CARD — ASLI DATA (ya Guest)
+              // PROFILE CARD
               // ================================================================
               Container(
                 width: double.infinity,
@@ -580,12 +573,10 @@ class _AccountScreenState extends State<AccountScreen> {
                   children: [
                     Row(
                       children: [
-                        // AVATAR
                         _buildAvatar(displayName),
 
                         const SizedBox(width: 16),
 
-                        // Name + Email/Info
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -614,7 +605,6 @@ class _AccountScreenState extends State<AccountScreen> {
                           ),
                         ),
 
-                        // ---- Guest: LOGIN button | Logged-in: EDIT ----
                         isLoggedIn
                             ? InkWell(
                                 onTap: () =>
@@ -736,29 +726,13 @@ class _AccountScreenState extends State<AccountScreen> {
               ),
 
               _buildMenuItem(
-                icon: Icons.notifications_outlined,
-                title: 'Notifications',
-                onTap: () {
-                  _showMessage('Notifications — coming soon');
-                },
-              ),
-
-              _buildMenuItem(
                 icon: Icons.credit_card_outlined,
                 title: 'Payment Methods',
-                onTap: () {
-                  _showMessage('Payment Methods — coming soon');
-                },
-              ),
-
-              _buildMenuItem(
-                icon: Icons.help_outline,
-                title: 'Help & Support',
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const HelpSupportScreen(),
+                      builder: (_) => const PaymentMethodsScreen(),
                     ),
                   );
                 },
@@ -768,25 +742,17 @@ class _AccountScreenState extends State<AccountScreen> {
                 icon: Icons.settings_outlined,
                 title: 'Settings',
                 onTap: () {
-                  _showMessage('Settings — coming soon');
-                },
-              ),
-
-              _buildMenuItem(
-                icon: Icons.privacy_tip_outlined,
-                title: 'Privacy Policy & Terms',
-                onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const PolicyScreen()),
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
                   );
                 },
-              ),
+              ), // ← FIX: Comma (,) — pehle semicolon (;) tha!
 
               const SizedBox(height: 16),
 
               // ================================================================
-              // LOGIN / LOGOUT — state ke mutabiq
+              // LOGIN / LOGOUT
               // ================================================================
               SizedBox(
                 width: double.infinity,

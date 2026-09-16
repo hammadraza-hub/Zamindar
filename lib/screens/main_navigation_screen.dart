@@ -1,10 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
+import '../providers/auth_provider.dart';
+import '../widgets/guest_login_prompt.dart';
 import 'home_screen.dart';
 import 'categories_screen.dart';
 import 'cart_screen.dart';
 import 'account_screen.dart';
+
+// ============================================================================
+// MAIN NAVIGATION — 4 tabs + GUEST LOGIN PROMPT
+//
+// App open hote hi check:
+//   Guest user → login prompt (din mein 1 dafa)
+//   Login user → kuch nahi (no disturbance!)
+// ============================================================================
 
 class MainNavigationScreen extends StatefulWidget {
   const MainNavigationScreen({super.key});
@@ -22,6 +33,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     CartScreen(),
     AccountScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+
+    // ---- Guest user ko login prompt dikhao ----
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !context.read<AuthProvider>().isLoggedIn) {
+        showGuestLoginPrompt(context);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
