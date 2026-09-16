@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../services/auth/auth_service.dart';
@@ -6,6 +8,8 @@ import '../services/auth/auth_service.dart';
 class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? _user;
   bool _initialized = false;
+  String? _photoUrl;
+  String? get photoUrl => _photoUrl;
 
   Map<String, dynamic>? get user => _user;
 
@@ -29,6 +33,7 @@ class AuthProvider extends ChangeNotifier {
   /// App start par saved session load karta hai.
   Future<void> loadSession() async {
     _user = await AuthService.getStoredUser();
+    _photoUrl = await AuthService.getProfilePhotoUrl();
     _initialized = true;
     notifyListeners();
   }
@@ -59,6 +64,19 @@ class AuthProvider extends ChangeNotifier {
 
     // (2) App state update (turant sab jagah naya naam!)
     _user?['display_name'] = displayName.trim();
+    notifyListeners();
+  }
+
+  /// Profile photo upload → cloud save → app update.
+  Future<void> uploadProfilePhoto(File imageFile) async {
+    // (1) Media library mein upload
+    final url = await AuthService.uploadProfilePhoto(imageFile.path);
+
+    // (2) URL customer profile mein save
+    await AuthService.saveProfilePhotoUrl(url);
+
+    // (3) App state update
+    _photoUrl = url;
     notifyListeners();
   }
 

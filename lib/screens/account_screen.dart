@@ -1,11 +1,10 @@
 import 'dart:io';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'orders_screen.dart';
 import '../providers/auth_provider.dart';
@@ -14,14 +13,14 @@ import 'login_screen.dart';
 import 'policy_screen.dart';
 import 'settings_screen.dart';
 import 'payment_methods_screen.dart';
-
 import '../providers/account_stats_provider.dart';
 
 // ============================================================================
-// ACCOUNT SCREEN (MY ACCOUNT) — LOGIN AWARE
+// ACCOUNT SCREEN — CLOUD SYNC!
 //
-// Logged-in:  ASLI naam + email (website se) + LOGOUT
-// Guest:      "Guest" + LOGIN button
+// Photo ab WordPress par upload hoti hai (multi-device!)
+// Naam/email website se (AuthProvider)
+// Orders count live (AccountStatsProvider)
 // ============================================================================
 
 class AccountScreen extends StatefulWidget {
@@ -32,17 +31,11 @@ class AccountScreen extends StatefulWidget {
 }
 
 class _AccountScreenState extends State<AccountScreen> {
-  // ==========================================================================
-  // 1. LOCAL DATA (sirf photo — naam/abhaar ab AuthProvider se)
-  // ==========================================================================
-
-  File? _profileImage;
+  bool _isUploadingPhoto = false;
 
   @override
   void initState() {
     super.initState();
-
-    _loadProfileImage();
 
     // Logged-in ho to orders count load karo
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -69,7 +62,7 @@ class _AccountScreenState extends State<AccountScreen> {
   // 2. SNACKBAR MESSAGE
   // ==========================================================================
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {bool isError = false}) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -78,35 +71,24 @@ class _AccountScreenState extends State<AccountScreen> {
           message,
           style: GoogleFonts.plusJakartaSans(color: Colors.white),
         ),
-        duration: const Duration(seconds: 1),
-        backgroundColor: const Color(0xFF087524),
+        duration: const Duration(seconds: 2),
+        backgroundColor: isError
+            ? const Color(0xFFC62828)
+            : const Color(0xFF087524),
       ),
     );
   }
 
   // ==========================================================================
-  // 3. PROFILE PHOTO — Load / Pick / Remove
+  // 3. PROFILE PHOTO — CLOUD UPLOAD!
+  //
+  // Photo pick → WordPress media upload → customer profile save
+  // Multi-device support! 🌐
   // ==========================================================================
 
-  Future<void> _loadProfileImage() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-
-      final String? path = prefs.getString('profile_image');
-
-      if (path != null && File(path).existsSync()) {
-        if (mounted) {
-          setState(() {
-            _profileImage = File(path);
-          });
-        }
-      }
-    } catch (_) {
-      // Load fail → initials use honge
-    }
-  }
-
   Future<void> _pickImage(ImageSource source) async {
+    if (_isUploadingPhoto) return;
+
     try {
       final picker = ImagePicker();
 
@@ -117,41 +99,21 @@ class _AccountScreenState extends State<AccountScreen> {
       );
 
       if (picked == null) return;
+      if (!mounted) return;
 
-      final appDir = await getApplicationDocumentsDirectory();
+      setState(() => _isUploadingPhoto = true);
 
-      final String fileName =
-          'profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
-
-      final File saved = await File(picked.path)
-          .copy('${appDir.path}/$fileName');
-
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('profile_image', saved.path);
-
+      // ---- CLOUD UPLOAD! (WordPress media + customer profile) ----
+      await context.read<AuthProvider>().uploadProfilePhoto(File(picked.path));
       if (mounted) {
-        setState(() {
-          _profileImage = saved;
-        });
-
-        _showMessage('Profile photo updated');
+        setState(() => _isUploadingPhoto = false);
+        _showMessage('Profile photo updated & synced! 🎉');
       }
-    } catch (_) {
-      _showMessage('Image select nahi ho saki');
-    }
-  }
-
-  Future<void> _removeImage() async {
-    final prefs = await SharedPreferences.getInstance();
-
-    await prefs.remove('profile_image');
-
-    if (mounted) {
-      setState(() {
-        _profileImage = null;
-      });
-
-      _showMessage('Photo removed');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isUploadingPhoto = false);
+        _showMessage('Photo upload failed: $e', isError: true);
+      }
     }
   }
 
@@ -190,6 +152,16 @@ class _AccountScreenState extends State<AccountScreen> {
                 ),
               ),
 
+              const SizedBox(height: 4),
+
+              Text(
+                'Syncs to your account (cloud)',
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 11,
+                  color: const Color(0xFF999999),
+                ),
+              ),
+
               const SizedBox(height: 8),
 
               ListTile(
@@ -221,22 +193,6 @@ class _AccountScreenState extends State<AccountScreen> {
                   _pickImage(ImageSource.camera);
                 },
               ),
-
-              if (_profileImage != null)
-                ListTile(
-                  leading: const Icon(
-                    Icons.delete_outline,
-                    color: Color(0xFFC62828),
-                  ),
-                  title: Text(
-                    'Remove Photo',
-                    style: GoogleFonts.plusJakartaSans(fontSize: 15),
-                  ),
-                  onTap: () {
-                    Navigator.pop(sheetContext);
-                    _removeImage();
-                  },
-                ),
 
               const SizedBox(height: 10),
             ],
@@ -326,10 +282,24 @@ class _AccountScreenState extends State<AccountScreen> {
   }
 
   // ==========================================================================
-  // 5. AVATAR WIDGET (photo ya initials)
+  // 5. AVATAR WIDGET — Cloud photo + upload indicator!
   // ==========================================================================
 
+  Widget _initialsWidget(String name) {
+    return Text(
+      _userInitials(name),
+      style: GoogleFonts.plusJakartaSans(
+        fontSize: 20,
+        fontWeight: FontWeight.w600,
+        color: Colors.white,
+      ),
+    );
+  }
+
   Widget _buildAvatar(String name) {
+    final auth = context.watch<AuthProvider>();
+    final String? photoUrl = auth.photoUrl;
+
     return InkWell(
       onTap: _showImageOptions,
       borderRadius: BorderRadius.circular(50),
@@ -346,48 +316,54 @@ class _AccountScreenState extends State<AccountScreen> {
               shape: BoxShape.circle,
             ),
 
-            child: _profileImage != null
+            child: _isUploadingPhoto
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : photoUrl != null && photoUrl.isNotEmpty
                 ? ClipOval(
-                    child: Image.file(
-                      _profileImage!,
+                    child: CachedNetworkImage(
+                      imageUrl: photoUrl,
                       width: 64,
                       height: 64,
                       fit: BoxFit.cover,
+                      placeholder: (_, _) => _initialsWidget(name),
+                      errorWidget: (_, _, _) => _initialsWidget(name),
                     ),
                   )
-                : Text(
-                    _userInitials(name),
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                  ),
+                : _initialsWidget(name),
           ),
 
-          Positioned(
-            bottom: 0,
-            right: 0,
+          // Camera badge (upload ke waqt hide)
+          if (!_isUploadingPhoto)
+            Positioned(
+              bottom: 0,
+              right: 0,
 
-            child: Container(
-              width: 24,
-              height: 24,
+              child: Container(
+                width: 24,
+                height: 24,
 
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                border: Border.fromBorderSide(
-                  BorderSide(color: Color(0xFFDCE8DA)),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  border: Border.fromBorderSide(
+                    BorderSide(color: Color(0xFFDCE8DA)),
+                  ),
+                ),
+
+                child: const Icon(
+                  Icons.camera_alt,
+                  size: 13,
+                  color: Color(0xFF087524),
                 ),
               ),
-
-              child: const Icon(
-                Icons.camera_alt,
-                size: 13,
-                color: Color(0xFF087524),
-              ),
             ),
-          ),
         ],
       ),
     );
@@ -496,7 +472,6 @@ class _AccountScreenState extends State<AccountScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ---- AUTH STATE (poori app se shared) ----
     final auth = context.watch<AuthProvider>();
 
     final bool isLoggedIn = auth.isLoggedIn;
@@ -661,7 +636,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
                     const SizedBox(height: 16),
 
-                    // ---- Stats Row (LIVE data!) ----
+                    // ---- Stats Row ----
                     Builder(
                       builder: (context) {
                         final stats = context.watch<AccountStatsProvider>();
@@ -747,7 +722,7 @@ class _AccountScreenState extends State<AccountScreen> {
                     MaterialPageRoute(builder: (_) => const SettingsScreen()),
                   );
                 },
-              ), // ← FIX: Comma (,) — pehle semicolon (;) tha!
+              ),
 
               const SizedBox(height: 16),
 

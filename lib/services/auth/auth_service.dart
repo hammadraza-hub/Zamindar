@@ -148,7 +148,115 @@ class AuthService {
       await _storage.write(key: _userKey, value: jsonEncode(user));
     }
   }
+  // ---------------- PROFILE PHOTO (NAYA) ----------------
 
+  /// Profile photo ko WordPress media library mein upload karta hai.
+  /// Upload hone par URL wapas deta hai.
+  static Future<String> uploadProfilePhoto(String filePath) async {
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw const ApiException('Image file not found.');
+    }
+
+    final bytes = await file.readAsBytes();
+
+    // Media upload ke liye ck/cs keys (admin level access)
+    final String basicAuth =
+        'Basic ${base64Encode(utf8.encode('${ApiCredentials.consumerKey}:${ApiCredentials.consumerSecret}'))}';
+
+    http.Response response;
+
+    try {
+      response = await http
+          .post(
+            Uri.parse('${AppConfig.baseUrl}/wp-json/wp/v2/media'),
+            headers: {
+              'Authorization': basicAuth,
+              'Content-Type': 'image/jpeg',
+              'Content-Disposition':
+                  'attachment; filename="profile_${DateTime.now().millisecondsSinceEpoch}.jpg"',
+            },
+            body: bytes,
+          )
+          .timeout(const Duration(seconds: 30));
+    } on SocketException {
+      throw ApiException('No internet connection. Please check your network.');
+    } on TimeoutException {
+      throw ApiException('Upload timed out. Please try again.');
+    }
+
+    if (response.statusCode == 201) {
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      return data['source_url']?.toString() ?? '';
+    }
+
+    throw ApiException('Photo upload failed (${response.statusCode})');
+  }
+
+  /// Photo URL ko WooCommerce customer profile mein save karta hai.
+  static Future<void> saveProfilePhotoUrl(String url) async {
+    final profile = await fetchUserProfile();
+    final userId = (profile?['id'] as num?)?.toInt() ?? 0;
+
+    if (userId <= 0) {
+      throw const ApiException('Could not identify account.');
+    }
+
+    final String basicAuth =
+        'Basic ${base64Encode(utf8.encode('${ApiCredentials.consumerKey}:${ApiCredentials.consumerSecret}'))}';
+
+    final response = await http
+        .post(
+          Uri.parse('${AppConfig.baseUrl}/wp-json/wc/v3/customers/$userId'),
+          headers: {
+            'Authorization': basicAuth,
+            'Content-Type': 'application/json',
+          },
+          body: jsonEncode({
+            'meta_data': [
+              {'key': 'profile_photo_url', 'value': url},
+            ],
+          }),
+        )
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode != 200) {
+      throw ApiException('Could not save photo (${response.statusCode})');
+    }
+  }
+
+  /// User ki saved profile photo URL fetch karta hai.
+  static Future<String?> getProfilePhotoUrl() async {
+    final profile = await fetchUserProfile();
+    final userId = (profile?['id'] as num?)?.toInt() ?? 0;
+
+    if (userId <= 0) return null;
+
+    final String basicAuth =
+        'Basic ${base64Encode(utf8.encode('${ApiCredentials.consumerKey}:${ApiCredentials.consumerSecret}'))}';
+
+    try {
+      final response = await http
+          .get(
+            Uri.parse('${AppConfig.baseUrl}/wp-json/wc/v3/customers/$userId'),
+            headers: {'Authorization': basicAuth},
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final metaData = data['meta_data'] as List? ?? [];
+
+        for (final meta in metaData) {
+          if (meta['key'] == 'profile_photo_url') {
+            return meta['value']?.toString();
+          }
+        }
+      }
+    } catch (_) {}
+
+    return null;
+  }
   // ---------------- LOGOUT ----------------
 
   static Future<void> logout() async {
