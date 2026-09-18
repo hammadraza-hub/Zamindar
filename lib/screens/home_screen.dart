@@ -6,14 +6,15 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../models/product.dart';
-import '../providers/auth_provider.dart';
+// import '../providers/auth_provider.dart';
 import '../repositories/product_repository.dart';
 import '../services/cart_provider.dart';
-import 'account_screen.dart';
+// import 'account_screen.dart';
 import 'categories_screen.dart';
 import 'search_screen.dart';
 import 'product_detail_screen.dart';
-import 'login_screen.dart';
+// import 'login_screen.dart';
+import '../widgets/profile_app_bar_icon.dart';
 
 // ============================================================================
 // HOME SCREEN
@@ -28,7 +29,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   // ==========================================================================
-  // 1. BANNER STATE — controller, timer, images
+  // 1. BANNER STATE
   // ==========================================================================
 
   final PageController _pageController = PageController();
@@ -43,11 +44,10 @@ class _HomeScreenState extends State<HomeScreen> {
     'assets/images/banner3.png',
   ];
 
-  /// Total pages = 3 asli + 1 copy (infinite loop ke liye)
   int get _pageCount => _banners.length + 1;
 
   // ==========================================================================
-  // 2. WHAT'S NEW PRODUCTS — zamindar.co API se LIVE data
+  // 2. WHAT'S NEW PRODUCTS
   // ==========================================================================
 
   final ProductRepository _productRepository = ProductRepository();
@@ -57,7 +57,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _productsError;
 
   // ==========================================================================
-  // 3. INIT — banner timer start + products load
+  // 3. INIT
   // ==========================================================================
 
   @override
@@ -71,13 +71,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
       int currentPage = _pageController.page?.round() ?? 0;
 
-      // Copy page (last) par? → invisible jump to page 0
       if (currentPage >= _banners.length) {
         _pageController.jumpToPage(0);
         currentPage = 0;
       }
 
-      // Hamesha forward animate — return NAHI
       _pageController.animateToPage(
         currentPage + 1,
         duration: const Duration(milliseconds: 600),
@@ -85,11 +83,9 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     });
 
-    // API se latest products load karo
     _loadProducts();
   }
 
-  /// zamindar.co se latest products fetch karta hai.
   Future<void> _loadProducts() async {
     setState(() {
       _isLoadingProducts = true;
@@ -116,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 4. DISPOSE — timer + controller cleanup
+  // 4. DISPOSE
   // ==========================================================================
 
   @override
@@ -128,7 +124,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 5. SNACKBAR MESSAGE
+  // 5. SNACKBAR
   // ==========================================================================
 
   void _showMessage(String message) {
@@ -147,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 6. ADD TO CART — API product se
+  // 6. ADD TO CART
   // ==========================================================================
 
   void _addToCart(Product product) {
@@ -172,11 +168,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 8. CATEGORY WIDGET — fixed width (horizontal scroll ke liye)
+  // 8. CATEGORY WIDGET — CUSTOM PNG ICONS!
   // ==========================================================================
 
   Widget _buildCategory({
-    required IconData icon,
+    required String iconPath,
     required String title,
     required VoidCallback onTap,
   }) {
@@ -189,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
         child: Column(
           children: [
-            // --- Icon Circle ---
+            // --- Icon Circle (CUSTOM PNG!) ---
             Container(
               width: 64,
               height: 64,
@@ -199,7 +195,19 @@ class _HomeScreenState extends State<HomeScreen> {
                 shape: BoxShape.circle,
               ),
 
-              child: Icon(icon, size: 27, color: const Color(0xFF087524)),
+              child: Padding(
+                padding: const EdgeInsets.all(10),
+                child: Image.asset(
+                  iconPath,
+                  fit: BoxFit.contain,
+                  // Fallback: agar PNG load na ho to icon dikhega
+                  errorBuilder: (_, _, _) => Icon(
+                    Icons.eco_outlined,
+                    size: 27,
+                    color: const Color(0xFF087524),
+                  ),
+                ),
+              ),
             ),
 
             const SizedBox(height: 10),
@@ -223,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 9. IMAGE PLACEHOLDER — jab image na ho / load na ho
+  // 9. IMAGE PLACEHOLDER
   // ==========================================================================
 
   Widget _imagePlaceholder() {
@@ -239,12 +247,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 10. PRODUCT CARD — API product + network image
-  // (card par tap → Product Detail screen khulti hai)
+  // 10. PRODUCT CARD
   // ==========================================================================
 
   Widget _buildProductCard(Product product) {
-    // Cart watch — quantity live update ke liye
     final CartProvider cart = context.watch<CartProvider>();
 
     final String cartId = product.id.toString();
@@ -261,7 +267,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final String? imageUrl = product.imageThumbnailUrl ?? product.imageUrl;
 
     return InkWell(
-      // ---- Card tap → DETAIL SCREEN ----
       onTap: () {
         Navigator.push(
           context,
@@ -285,7 +290,6 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- Product Image (API se — network image) ---
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: SizedBox(
@@ -304,7 +308,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 10),
 
-            // --- Product Name ---
             Text(
               product.name,
               maxLines: 1,
@@ -317,7 +320,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 4),
 
-            // --- Product Price (sale par purani price bhi dikhti hai) ---
             Text.rich(
               TextSpan(
                 children: [
@@ -349,7 +351,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 10),
 
-            // --- Add To Cart Button (+ quantity) ---
             SizedBox(
               width: double.infinity,
               height: 38,
@@ -429,7 +430,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
       child: Stack(
         children: [
-          // --- Decorative Quote ---
           Positioned(
             top: -18,
             right: -5,
@@ -444,11 +444,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // --- Review Content ---
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Rating Stars
               Row(
                 children: List.generate(
                   5,
@@ -462,7 +460,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 12),
 
-              // Review Text
               Text(
                 '"Zamindar\'s agricultural medicines have\n'
                 'truly transformed my farm. My crops are\n'
@@ -477,7 +474,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 16),
 
-              // Reviewer — Avatar + Name
               Row(
                 children: [
                   Container(
@@ -517,7 +513,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 13. PRODUCTS ERROR — message + Retry button
+  // 13. PRODUCTS ERROR
   // ==========================================================================
 
   Widget _buildProductsError() {
@@ -573,7 +569,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   // ==========================================================================
-  // 14. MAIN UI — build method
+  // 14. MAIN UI
   // ==========================================================================
 
   @override
@@ -581,7 +577,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFFCF9F7),
 
-      // BottomNavigationBar MainNavigationScreen handle karta hai
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -592,11 +587,10 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
 
               // =================================================================
-              // 15. HEADER — logo + title + search + profile
+              // 15. HEADER
               // =================================================================
               Row(
                 children: [
-                  // Logo
                   Image.asset(
                     'assets/images/zamindar_logo.png',
                     width: 70,
@@ -606,7 +600,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const SizedBox(width: 8),
 
-                  // Home Title
                   Text(
                     'Home',
                     style: GoogleFonts.plusJakartaSans(
@@ -618,7 +611,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const Spacer(),
 
-                  // Search Button
                   IconButton(
                     onPressed: () {
                       Navigator.push(
@@ -640,46 +632,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   const SizedBox(width: 14),
 
-                  // Profile Button — SMART
-                  // Guest → Login Screen | Logged-in → Account Screen
-                  InkWell(
-                    onTap: () {
-                      final bool isLoggedIn = context
-                          .read<AuthProvider>()
-                          .isLoggedIn;
-
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => isLoggedIn
-                              ? const AccountScreen()
-                              : const LoginScreen(),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(50),
-
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF087524),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.person_outline,
-                        size: 20,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                  // Profile Button (LIVE PHOTO!)
+                  const ProfileAppBarIcon(),
                 ],
               ),
 
               const SizedBox(height: 16),
 
               // =================================================================
-              // 16. HERO BANNER SLIDER — infinite forward loop
+              // 16. HERO BANNER SLIDER
               // =================================================================
               SizedBox(
                 width: double.infinity,
@@ -687,7 +648,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 child: Stack(
                   children: [
-                    // --- Banner PageView (sirf YAHAN, kahin aur nahi!) ---
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
 
@@ -715,7 +675,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
 
-                    // --- Slider Dots ---
                     Positioned(
                       bottom: 12,
                       left: 0,
@@ -750,7 +709,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 28),
 
               // =================================================================
-              // 17. CHOOSE BY CATEGORY — 5 categories
+              // 17. CHOOSE BY CATEGORY — CUSTOM PNG ICONS!
               // =================================================================
               Text(
                 'Choose by Category',
@@ -769,7 +728,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                   children: [
                     _buildCategory(
-                      icon: Icons.eco_outlined,
+                      iconPath: 'assets/images/icon_pgr.png',
                       title: 'PGRs &\nMicronutrients',
                       onTap: () {
                         _showCategoryMessage('PGRs & Micronutrients');
@@ -777,7 +736,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     _buildCategory(
-                      icon: Icons.agriculture_outlined,
+                      iconPath: 'assets/images/icon_herbicide.png',
                       title: 'Herbicides',
                       onTap: () {
                         _showCategoryMessage('Herbicides');
@@ -785,7 +744,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     _buildCategory(
-                      icon: Icons.science_outlined,
+                      iconPath: 'assets/images/icon_fungicide.png',
                       title: 'Fungicides',
                       onTap: () {
                         _showCategoryMessage('Fungicides');
@@ -793,7 +752,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     _buildCategory(
-                      icon: Icons.bug_report_outlined,
+                      iconPath: 'assets/images/icon_insecticide.png',
                       title: 'Insecticides',
                       onTap: () {
                         _showCategoryMessage('Insecticides');
@@ -801,7 +760,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
 
                     _buildCategory(
-                      icon: Icons.grass,
+                      iconPath: 'assets/images/icon_seed.png',
                       title: 'Seed Care',
                       onTap: () {
                         _showCategoryMessage('Seed Care');
@@ -813,7 +772,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 30),
 
               // =================================================================
-              // 18. WHAT'S NEW HEADER — title + See All
+              // 18. WHAT'S NEW HEADER
               // =================================================================
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -850,7 +809,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 16),
 
               // =================================================================
-              // 19. WHAT'S NEW PRODUCTS — LIVE API + loading + error states
+              // 19. WHAT'S NEW PRODUCTS
               // =================================================================
               SizedBox(
                 height: 270,
@@ -892,7 +851,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 30),
 
               // =================================================================
-              // 20. OUR BRANDS — horizontal chips
+              // 20. OUR BRANDS
               // =================================================================
               Text(
                 'Our Brands',

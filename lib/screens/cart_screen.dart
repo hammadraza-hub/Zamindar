@@ -5,8 +5,9 @@ import 'package:provider/provider.dart';
 
 import '../services/cart_provider.dart';
 import 'checkout_screen.dart';
-import 'account_screen.dart';
+
 import 'search_screen.dart';
+import '../widgets/profile_app_bar_icon.dart';
 
 // ============================================================================
 // CART SCREEN
@@ -445,30 +446,10 @@ class _CartScreenState extends State<CartScreen> {
 
                   const SizedBox(width: 14),
 
-                  InkWell(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AccountScreen(),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(50),
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF087524),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.person_outline,
-                        size: 20,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                  // Profile Button — SMART
+                  // Guest → Login Screen | Logged-in → Account Screen
+                  // Profile Button (LIVE PHOTO!)
+                  const ProfileAppBarIcon(),
                 ],
               ),
             ),

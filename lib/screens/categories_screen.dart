@@ -1,25 +1,28 @@
+import 'dart:convert';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
+import '../config/app_config.dart';
 import '../models/category.dart';
 import '../models/product.dart';
 import '../repositories/product_repository.dart';
 import '../services/cart_provider.dart';
-import 'account_screen.dart';
+
 import 'search_screen.dart';
+import '../widgets/profile_app_bar_icon.dart';
 import 'product_detail_screen.dart';
 
 // ============================================================================
-// CATEGORIES SCREEN
+// CATEGORIES SCREEN — API + BRAND FILTER!
 //
-// Categories + products ab zamindar.co API se LIVE aate hain!
-//
-//   - Category chips API se (Fertilizer, Herbicide, Fungicide, ...)
-//   - Category tap → us category ke asli products
+//   - Category chips API se
+//   - Brand filter (17 brands live!)
 //   - Price filter (slider) + Sort
-//   - Pagination — "Explore More" API se next page lata hai
+//   - Pagination — "Explore More"
 //   - Card tap → Product Detail screen
 // ============================================================================
 
@@ -37,7 +40,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   final ProductRepository _repository = ProductRepository();
 
-  /// Ek page par kitne products maangte hain (pagination).
   static const int _perPage = 20;
 
   // ---- Categories (API) ----
@@ -45,7 +47,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   bool _isLoadingCategories = true;
   String? _categoriesError;
 
-  /// Selected category — null matlab "All".
   Category? _selectedCategory;
 
   // ---- Products (API) ----
@@ -55,6 +56,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   String? _productsError;
   int _currentPage = 0;
   bool _hasMore = true;
+
+  // ---- Brands (API — custom endpoint!) ----
+  Map<String, String> _brandsMap = {}; // productId → brandName
+  List<String> _allBrands = []; // unique brand names
+  final List<String> _selectedBrands = []; // selected for filter
 
   // ---- Sort ----
   String selectedSort = 'Popularity';
@@ -68,12 +74,22 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   bool get _isPriceFilterActive =>
       _priceRange.start > _priceMinLimit || _priceRange.end < _priceMaxLimit;
 
+  bool get _isBrandFilterActive => _selectedBrands.isNotEmpty;
+
   // ==========================================================================
-  // 2. FILTERED + SORTED PRODUCTS (loaded data par client-side)
+  // 2. FILTERED + SORTED PRODUCTS
   // ==========================================================================
 
   List<Product> get filteredProducts {
     List<Product> result = List<Product>.from(_products);
+
+    // ---- BRAND Filter ----
+    if (_selectedBrands.isNotEmpty) {
+      result = result.where((p) {
+        final brand = _brandsMap[p.id.toString()] ?? '';
+        return _selectedBrands.contains(brand);
+      }).toList();
+    }
 
     // ---- Price Filter (slider) ----
     if (_isPriceFilterActive) {
@@ -90,7 +106,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     } else if (selectedSort == 'Price High') {
       result.sort((a, b) => b.price.compareTo(a.price));
     }
-    // 'Popularity' / 'Newest' → API ka default order (newest first)
 
     return result;
   }
@@ -104,7 +119,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     super.initState();
 
     _loadCategories();
-    _loadProducts(); // "All" ke liye initial load
+    _loadProducts();
   }
 
   // ==========================================================================
@@ -138,7 +153,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
   /// Category chip tap par — "All" ke liye [category] = null.
   Future<void> _selectCategory(Category? category) async {
-    // Wahi category dobara tap → reload skip
     if (_selectedCategory?.id == category?.id && _products.isNotEmpty) {
       return;
     }
@@ -172,7 +186,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
       final List<Product> fetched;
 
       if (_selectedCategory == null) {
-        // "All" → latest products
         fetched = await _repository.getLatestProducts(
           perPage: _perPage,
           page: page,
@@ -183,6 +196,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           perPage: _perPage,
           page: page,
         );
+      }
+
+      // ---- Brands bhi load karo (sirf pehli baar) ----
+      if (_allBrands.isEmpty) {
+        await _loadBrands();
       }
 
       if (!mounted) return;
@@ -197,8 +215,6 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         }
 
         _currentPage = page;
-
-        // Page full nahi aya → aur pages nahi hain
         _hasMore = fetched.length >= _perPage;
       });
     } catch (e) {
@@ -213,6 +229,28 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
           _isLoadingProducts = false;
         });
       }
+    }
+  }
+
+  /// Brands data fetch (custom endpoint: /wp-json/zamindar/v1/brands)
+  Future<void> _loadBrands() async {
+    try {
+      final response = await http
+          .get(Uri.parse('${AppConfig.baseUrl}/wp-json/zamindar/v1/brands'))
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+
+        // Product → Brand map
+        final rawMap = data['product_brands'] as Map<String, dynamic>? ?? {};
+        _brandsMap = rawMap.map((k, v) => MapEntry(k, v.toString()));
+
+        // Unique brand names (sorted alphabetically)
+        _allBrands = _brandsMap.values.toSet().toList()..sort();
+      }
+    } catch (_) {
+      // Brands load fail → brand filter kaam nahi karega, but app chalegi
     }
   }
 
@@ -236,7 +274,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 6. ADD TO CART (API product)
+  // 6. ADD TO CART
   // ==========================================================================
 
   void _addToCart(Product product) {
@@ -338,7 +376,46 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 10. PRODUCT CARD (API product — network image + tap → detail screen)
+  // 10. BRAND CHIP (selected brand ka chip — filters row ke liye)
+  // ==========================================================================
+
+  Widget _buildBrandChip(String brand) {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.only(left: 12, right: 7),
+      decoration: BoxDecoration(
+        color: const Color(0xFFDCE8DA),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            brand,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 12,
+              color: const Color(0xFF087524),
+            ),
+          ),
+
+          const SizedBox(width: 4),
+
+          InkWell(
+            onTap: () {
+              setState(() {
+                _selectedBrands.remove(brand);
+              });
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: const Icon(Icons.close, size: 16, color: Color(0xFF087524)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================================
+  // 11. PRODUCT CARD
   // ==========================================================================
 
   Widget _buildProductCard(Product product) {
@@ -357,13 +434,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
     final String? imageUrl = product.imageThumbnailUrl ?? product.imageUrl;
 
-    // Brand ki jagah category ka naam (API mein brand alag se nahi aata)
-    final String topLine = product.categoryNames.isNotEmpty
-        ? product.categoryNames.first.toUpperCase()
-        : '';
+    // ---- BRAND dikhaao (API se!) ----
+    final String brand = _brandsMap[product.id.toString()] ?? '';
 
     return InkWell(
-      // ---- Card tap → DETAIL SCREEN ----
       onTap: () {
         Navigator.push(
           context,
@@ -391,7 +465,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // --- Image (API se network image) ---
+            // --- Image ---
             ClipRRect(
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(12),
@@ -416,10 +490,10 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Category (brand ki jagah)
-                  if (topLine.isNotEmpty)
+                  // BRAND (live data!)
+                  if (brand.isNotEmpty)
                     Text(
-                      topLine,
+                      brand.toUpperCase(),
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 11,
                         color: const Color(0xFF555555),
@@ -511,7 +585,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 11. PRODUCTS ERROR — message + Retry
+  // 12. PRODUCTS ERROR
   // ==========================================================================
 
   Widget _buildProductsError() {
@@ -567,11 +641,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 12. FILTER SHEET (price range)
-  //
-  // NOTE: Company/brand filter hata diya — API products mein brand ka
-  // data nahi aata. Baad mein website par brand attribute mil jaye
-  // to wapas add kar sakte hain.
+  // 13. FILTER SHEET — BRAND + PRICE!
   // ==========================================================================
 
   void _showFilterSheet() {
@@ -586,7 +656,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
         return StatefulBuilder(
           builder: (sheetContext, setSheetState) {
             return SafeArea(
-              child: Padding(
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 30),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -607,17 +677,104 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     const SizedBox(height: 20),
 
                     // --- Title ---
-                    Text(
-                      'Filters',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                      ),
+                    Row(
+                      children: [
+                        Text(
+                          'Filters',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+
+                        const Spacer(),
+
+                        if (_selectedBrands.isNotEmpty)
+                          Text(
+                            '${_selectedBrands.length} brand(s)',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              color: const Color(0xFF087524),
+                            ),
+                          ),
+                      ],
                     ),
 
                     const SizedBox(height: 24),
 
-                    // --- Price Slider ---
+                    // ---- BRAND FILTER ----
+                    if (_allBrands.isNotEmpty) ...[
+                      Text(
+                        'Brand',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // Brand chips (horizontal scroll)
+                      SizedBox(
+                        height: 38,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _allBrands.length,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final brand = _allBrands[index];
+                            final isSelected = _selectedBrands.contains(brand);
+
+                            return InkWell(
+                              onTap: () {
+                                setState(() {
+                                  if (isSelected) {
+                                    _selectedBrands.remove(brand);
+                                  } else {
+                                    _selectedBrands.add(brand);
+                                  }
+                                });
+                                setSheetState(() {});
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: isSelected
+                                      ? const Color(0xFF087524)
+                                      : const Color(0xFFF0F3EE),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? const Color(0xFF087524)
+                                        : const Color(0xFFD5E2D3),
+                                  ),
+                                ),
+                                child: Text(
+                                  brand,
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : const Color(0xFF333333),
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+                    ],
+
+                    // ---- PRICE SLIDER ----
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -664,13 +821,14 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                     const SizedBox(height: 26),
 
-                    // --- Clear All + Done ---
+                    // ---- Clear All + Done ----
                     Row(
                       children: [
                         Expanded(
                           child: OutlinedButton(
                             onPressed: () {
                               setState(() {
+                                _selectedBrands.clear();
                                 _priceRange = const RangeValues(
                                   _priceMinLimit,
                                   _priceMaxLimit,
@@ -733,7 +891,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   }
 
   // ==========================================================================
-  // 13. MAIN UI
+  // 14. MAIN UI
   // ==========================================================================
 
   @override
@@ -796,30 +954,8 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
 
                   const SizedBox(width: 14),
 
-                  InkWell(
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => const AccountScreen(),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(50),
-                    child: Container(
-                      width: 34,
-                      height: 34,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF087524),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.person_outline,
-                        size: 20,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
+                  // Profile Button (LIVE PHOTO!)
+                  const ProfileAppBarIcon(),
                 ],
               ),
             ),
@@ -827,7 +963,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             const Divider(height: 1, thickness: 1, color: Color(0xFFF0EEEE)),
 
             // ================================================================
-            // HEADER — Centered Title + Count
+            // HEADER
             // ================================================================
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
@@ -862,7 +998,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             const SizedBox(height: 16),
 
             // ================================================================
-            // CATEGORY CHIPS (API — loading / error / list)
+            // CATEGORY CHIPS
             // ================================================================
             SizedBox(
               height: 42,
@@ -979,6 +1115,29 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                                   color: const Color(0xFF087524),
                                 ),
                               ),
+
+                              // Brand count badge!
+                              if (_selectedBrands.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF087524),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${_selectedBrands.length}',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -1035,37 +1194,20 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     ],
                   ),
 
-                  // ---- Price Filter Chip ----
-                  if (_isPriceFilterActive) ...[
+                  // ---- Active Filter Chips (Brand + Price) ----
+                  if (_isBrandFilterActive || _isPriceFilterActive) ...[
                     const SizedBox(height: 14),
 
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
                       children: [
-                        _buildPriceChip(),
+                        // Brand chips
+                        for (final brand in _selectedBrands)
+                          _buildBrandChip(brand),
 
-                        const SizedBox(width: 8),
-
-                        InkWell(
-                          onTap: () {
-                            setState(() {
-                              _priceRange = const RangeValues(
-                                _priceMinLimit,
-                                _priceMaxLimit,
-                              );
-                            });
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.only(top: 7),
-                            child: Text(
-                              'Clear',
-                              style: GoogleFonts.plusJakartaSans(
-                                fontSize: 12,
-                                color: const Color(0xFF087524),
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                        ),
+                        // Price chip
+                        if (_isPriceFilterActive) _buildPriceChip(),
                       ],
                     ),
                   ],
@@ -1076,7 +1218,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
             const SizedBox(height: 24),
 
             // ================================================================
-            // PRODUCTS GRID + EXPLORE MORE (scroll ke saath)
+            // PRODUCTS GRID + EXPLORE MORE
             // ================================================================
             Expanded(
               child: _isLoadingProducts
@@ -1121,7 +1263,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                           ),
                         ),
 
-                        // ---- Explore More (REAL pagination) ----
+                        // ---- Explore More ----
                         SliverToBoxAdapter(
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(42, 0, 42, 12),
@@ -1202,9 +1344,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                             padding: const EdgeInsets.only(bottom: 16),
                             child: Center(
                               child: Text(
-                                _selectedCategory == null
-                                    ? 'Showing ${visibleProducts.length} results'
-                                    : 'Showing ${visibleProducts.length} of ${_selectedCategory!.count} results',
+                                'Showing ${visibleProducts.length} results',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 12,
                                   color: const Color(0xFF666666),
