@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:lottie/lottie.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'main_navigation_screen.dart';
@@ -7,12 +8,11 @@ import 'main_navigation_screen.dart';
 // ============================================================================
 // ONBOARDING SCREEN
 //
-// App PEHLI baar khulne par 3 slides:
-//   1. Boost Your Harvest (brand)
-//   2. Everything Your Farm Needs (products)
-//   3. Fast & Free Delivery (benefits)
+// Slide 1: LOTTIE ANIMATION (tractor!) 🚜
+// Slide 2: Icon design (products)
+// Slide 3: Icon design (delivery)
 //
-// GET STARTED → save → Main App (dobara kabhi nahi dikhti)
+// GET STARTED → save → Main App
 // ============================================================================
 
 class OnboardingScreen extends StatefulWidget {
@@ -31,9 +31,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   int _currentPage = 0;
 
-  /// Slides — website ke REAL content se
+  /// Slides — PEHLI slide mein LOTTIE animation!
   final List<Map<String, dynamic>> _slides = [
     {
+      'animation': 'assets/animations/farming.json',
       'icon': Icons.agriculture,
       'title': 'Boost Your Harvest',
       'subtitle':
@@ -61,13 +62,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   // ==========================================================================
 
   Future<void> _finishOnboarding() async {
-    // Prefs mein save — agli baar skip
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboarding_done', true);
 
     if (!mounted) return;
 
-    // Main app — fresh start
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
@@ -85,71 +84,38 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         curve: Curves.easeInOut,
       );
     } else {
-      // Last slide → finish
       _finishOnboarding();
     }
   }
 
   // ==========================================================================
-  // 4. SLIDE — bara circle + title + subtitle
+  // 4. SLIDE — LOTTIE ya Icon + title + subtitle
   // ==========================================================================
 
   Widget _buildSlide(Map<String, dynamic> slide) {
+    final String? animPath = slide['animation'] as String?;
+    final IconData icon = slide['icon'] as IconData;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
 
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // --- Decorative circles (3 layers) ---
-          Stack(
-            alignment: Alignment.center,
-            children: [
-              // Layer 1 — bahut halka green
-              Container(
-                width: 240,
-                height: 240,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDCE8DA).withValues(alpha: 0.4),
-                  shape: BoxShape.circle,
-                ),
-              ),
-
-              // Layer 2 — halka green
-              Container(
-                width: 190,
-                height: 190,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFDCE8DA),
-                  shape: BoxShape.circle,
-                ),
-              ),
-
-              // Layer 3 — dark green + shadow
-              Container(
-                width: 140,
-                height: 140,
-
-                decoration: BoxDecoration(
-                  color: const Color(0xFF087524),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF087524).withValues(alpha: 0.3),
-                      blurRadius: 30,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-
-                child: Icon(
-                  slide['icon'] as IconData,
-                  size: 60,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
+          // --- Visual (Lottie ya Icon circles) ---
+          if (animPath != null)
+            // ---- LOTTIE ANIMATION (Slide 1) 🚜 ----
+            Lottie.asset(
+              animPath,
+              width: 280,
+              height: 280,
+              fit: BoxFit.contain,
+              repeat: true,
+              errorBuilder: (_, _, _) => _buildIconCircles(icon),
+            )
+          else
+            // ---- ICON CIRCLES (Slide 2, 3) ----
+            _buildIconCircles(icon),
 
           const SizedBox(height: 60),
 
@@ -181,10 +147,56 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
+  /// Icon circles design (Slide 2, 3 + fallback)
+  Widget _buildIconCircles(IconData icon) {
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        // Layer 1 — bahut halka green
+        Container(
+          width: 240,
+          height: 240,
+          decoration: BoxDecoration(
+            color: const Color(0xFFDCE8DA).withValues(alpha: 0.4),
+            shape: BoxShape.circle,
+          ),
+        ),
+
+        // Layer 2 — halka green
+        Container(
+          width: 190,
+          height: 190,
+          decoration: const BoxDecoration(
+            color: Color(0xFFDCE8DA),
+            shape: BoxShape.circle,
+          ),
+        ),
+
+        // Layer 3 — dark green + shadow
+        Container(
+          width: 140,
+          height: 140,
+
+          decoration: BoxDecoration(
+            color: const Color(0xFF087524),
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF087524).withValues(alpha: 0.3),
+                blurRadius: 30,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+
+          child: Icon(icon, size: 60, color: Colors.white),
+        ),
+      ],
+    );
+  }
+
   // ==========================================================================
   // 5. MAIN UI
-  //
-  // [Skip] → [Slides] → [Dots] → [NEXT / GET STARTED]
   // ==========================================================================
 
   @override
@@ -197,7 +209,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // --- Skip (sirf pehli 2 slides par) ---
+            // --- Skip ---
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
 
@@ -220,7 +232,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // --- Slides (swipe bhi kar sakte ho) ---
+            // --- Slides ---
             Expanded(
               child: PageView.builder(
                 controller: _pageController,
@@ -244,7 +256,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
               child: Column(
                 children: [
-                  // Dots (active lamba hota hai — pill shape)
+                  // Dots
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
 
@@ -254,8 +266,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       return AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
                         margin: const EdgeInsets.symmetric(horizontal: 4),
-
-                        // Active = 24px lambi pill
                         width: isActive ? 24 : 10,
                         height: 10,
 
@@ -271,7 +281,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
                   const SizedBox(height: 32),
 
-                  // NEXT / GET STARTED button
+                  // NEXT / GET STARTED
                   SizedBox(
                     width: double.infinity,
                     height: 54,
