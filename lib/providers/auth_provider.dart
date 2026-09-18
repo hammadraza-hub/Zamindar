@@ -8,13 +8,21 @@ import '../services/auth/auth_service.dart';
 class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? _user;
   bool _initialized = false;
+
   String? _photoUrl;
-  String? get photoUrl => _photoUrl;
+  int? _photoMediaId;
 
   Map<String, dynamic>? get user => _user;
 
+  String? get photoUrl => _photoUrl;
+  int? get photoMediaId => _photoMediaId;
+
+  /// Debug logging helper (avoid_print warning fix!)
+  void _log(String msg) {
+    if (kDebugMode) debugPrint(msg);
+  }
+
   /// Display name — warna email ka pehla hissa.
-  /// (Naam mein email na aaye!)
   String get userName {
     final name = _user?['display_name']?.toString() ?? '';
     if (name.isNotEmpty && !name.contains('@')) return name;
@@ -33,7 +41,11 @@ class AuthProvider extends ChangeNotifier {
   /// App start par saved session load karta hai.
   Future<void> loadSession() async {
     _user = await AuthService.getStoredUser();
-    _photoUrl = await AuthService.getProfilePhotoUrl();
+
+    final photo = await AuthService.getProfilePhotoData();
+    _photoUrl = photo.url;
+    _photoMediaId = photo.mediaId;
+
     _initialized = true;
     notifyListeners();
   }
@@ -42,8 +54,6 @@ class AuthProvider extends ChangeNotifier {
   Future<void> login(String username, String password) async {
     final data = await AuthService.login(username, password);
 
-    // AuthService ne display name pehle hi theek kar ke
-    // saveSession mein likha hai — wahi dobara parho
     final stored = await AuthService.getStoredUser();
 
     _user =
@@ -54,29 +64,45 @@ class AuthProvider extends ChangeNotifier {
           'username': data['user_nicename']?.toString() ?? '',
         };
 
+    // After login, load avatar info from cloud meta
+    final photo = await AuthService.getProfilePhotoData();
+    _photoUrl = photo.url;
+    _photoMediaId = photo.mediaId;
+
     notifyListeners();
   }
 
   /// Profile naam update — website + local dono.
   Future<void> updateDisplayName(String displayName) async {
-    // (1) Website par update
     await AuthService.updateDisplayName(displayName);
 
-    // (2) App state update (turant sab jagah naya naam!)
     _user?['display_name'] = displayName.trim();
     notifyListeners();
   }
 
-  /// Profile photo upload → cloud save → app update.
+  /// Profile photo upload → server set (old auto-delete) → app update
+  ///
+  /// Flow:
+  ///   1. Upload to WordPress media (id + url)
+  ///   2. Server plugin: purani photo DELETE + new meta save
+  ///   3. App state update
   Future<void> uploadProfilePhoto(File imageFile) async {
-    // (1) Media library mein upload
-    final url = await AuthService.uploadProfilePhoto(imageFile.path);
+    // (1) Upload to WordPress media
+    final uploaded = await AuthService.uploadProfilePhotoWithId(imageFile.path);
 
-    // (2) URL customer profile mein save
-    await AuthService.saveProfilePhotoUrl(url);
+    _log("Avatar upload: newMediaId=${uploaded.id}, url=${uploaded.url}");
 
-    // (3) App state update
-    _photoUrl = url;
+    // (2) Server: old photo delete + meta save (plugin handles!)
+    await AuthService.setAvatarOnServer(
+      mediaId: uploaded.id,
+      url: uploaded.url,
+    );
+
+    _log("Avatar upload: server set complete (old deleted + meta saved)");
+
+    // (3) Update app state
+    _photoUrl = uploaded.url;
+    _photoMediaId = uploaded.id;
     notifyListeners();
   }
 
@@ -84,11 +110,12 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await AuthService.logout();
     _user = null;
+    _photoUrl = null;
+    _photoMediaId = null;
     notifyListeners();
   }
 
   /// Signup → account banao → turant LOGIN bhi!
-  /// (user ko dobara login form nahi bharna parta)
   Future<void> signup({
     required String email,
     required String password,
@@ -96,7 +123,6 @@ class AuthProvider extends ChangeNotifier {
     required String lastName,
     String? phone,
   }) async {
-    // (1) WordPress par account banao
     await AuthService.signup(
       email: email,
       password: password,
@@ -105,7 +131,6 @@ class AuthProvider extends ChangeNotifier {
       phone: phone,
     );
 
-    // (2) Turant login — token le lo
     await login(email, password);
   }
 }

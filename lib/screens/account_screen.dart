@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -14,6 +15,9 @@ import 'policy_screen.dart';
 import 'settings_screen.dart';
 import 'payment_methods_screen.dart';
 import '../providers/account_stats_provider.dart';
+
+import 'package:flutter_compress/flutter_compress.dart';
+import 'package:path_provider/path_provider.dart';
 
 // ============================================================================
 // ACCOUNT SCREEN — CLOUD SYNC!
@@ -39,8 +43,9 @@ class _AccountScreenState extends State<AccountScreen> {
 
     // Logged-in ho to orders count load karo
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (context.read<AuthProvider>().isLoggedIn) {
-        context.read<AccountStatsProvider>().loadStats();
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      if (auth.isLoggedIn) {
+        Provider.of<AccountStatsProvider>(context, listen: false).loadStats();
       }
     });
   }
@@ -79,41 +84,56 @@ class _AccountScreenState extends State<AccountScreen> {
     );
   }
 
-  // ==========================================================================
-  // 3. PROFILE PHOTO — CLOUD UPLOAD!
-  //
-  // Photo pick → WordPress media upload → customer profile save
-  // Multi-device support! 🌐
-  // ==========================================================================
-
   Future<void> _pickImage(ImageSource source) async {
     if (_isUploadingPhoto) return;
+
+    // 1) Capture provider BEFORE async work (no context after awaits)
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
       final picker = ImagePicker();
 
-      final XFile? picked = await picker.pickImage(
-        source: source,
-        maxWidth: 600,
-        imageQuality: 85,
-      );
-
+      final XFile? picked = await picker.pickImage(source: source);
       if (picked == null) return;
       if (!mounted) return;
 
       setState(() => _isUploadingPhoto = true);
 
-      // ---- CLOUD UPLOAD! (WordPress media + customer profile) ----
-      await context.read<AuthProvider>().uploadProfilePhoto(File(picked.path));
-      if (mounted) {
-        setState(() => _isUploadingPhoto = false);
-        _showMessage('Profile photo updated & synced! 🎉');
-      }
+      // 2) Read bytes
+      final Uint8List inputBytes = await picked.readAsBytes();
+      if (!mounted) return;
+
+      // 3) Compress (avatar only)
+      final out = await FlutterCompress.instance.compressImageBytes(
+        inputBytes,
+        ImageCompressConfig(
+          targetSizeKB: 150,
+          maxWidth: 1024,
+          maxHeight: 1024,
+          format: ImageFormat.webp,
+          keepExif: false,
+        ),
+      );
+      if (!mounted) return;
+
+      // 4) Write to temp file (because uploadProfilePhoto takes File)
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/avatar_${DateTime.now().millisecondsSinceEpoch}.webp',
+      );
+      await file.writeAsBytes(out.bytes, flush: true);
+      if (!mounted) return;
+
+      // 5) Upload without using context (we already captured authProvider)
+      await authProvider.uploadProfilePhoto(file);
+      if (!mounted) return;
+
+      setState(() => _isUploadingPhoto = false);
+      _showMessage('Profile photo updated & synced!');
     } catch (e) {
-      if (mounted) {
-        setState(() => _isUploadingPhoto = false);
-        _showMessage('Photo upload failed: $e', isError: true);
-      }
+      if (!mounted) return;
+      setState(() => _isUploadingPhoto = false);
+      _showMessage('Photo upload failed: $e', isError: true);
     }
   }
 

@@ -45,6 +45,10 @@ dependencies:
   flutter_secure_storage: ^11.1.1
   lottie: ^3.5.1
   share_plus: ^13.3.0
+  flutter_compress: ^2.0.0
+  firebase_auth: ^6.7.0
+  firebase_storage: ^13.6.0
+  cloud_firestore: ^6.10.0
 
 dev_dependencies:
   flutter_test:
